@@ -1,7 +1,8 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { navigate } from "@/ui/router";
-import { rosterStore, sessionStore, venueRepo, authStore } from "@/ui/stores";
+import { rosterStore, sessionStore, venueRepo, authStore, plannedSessionRepo, plannedSessionStore, rsvpStore } from "@/ui/stores";
+import { getFromParam } from "@/ui/location";
 
 // Form state — scoped per page navigation. signals are module-scoped here for
 // simplicity; if the user navigates away and back, the previous form contents
@@ -16,6 +17,8 @@ const selected = signal<Set<number>>(new Set());
 const venues = signal<string[]>([]);
 const submitting = signal(false);
 const error = signal<string | null>(null);
+/** Tracks the ?from=<plannedSessionId> query param. Set when preloading from a planned session. */
+const plannedSessionId = signal<string | null>(null);
 
 /** Reset all form state to defaults. Called by tests in beforeEach. */
 export function resetFormState(): void {
@@ -27,6 +30,7 @@ export function resetFormState(): void {
   venues.value = [];
   submitting.value = false;
   error.value = null;
+  plannedSessionId.value = null;
 }
 
 function toggle(id: number): void {
@@ -39,6 +43,29 @@ function toggle(id: number): void {
 async function loadAux(): Promise<void> {
   await rosterStore.load();
   venues.value = await venueRepo.list();
+
+  // If ?from=<id> is in the URL, preload form from the planned session.
+  const fromId = getFromParam();
+  if (fromId) {
+    plannedSessionId.value = fromId;
+    const [planned, rsvps] = await Promise.all([
+      plannedSessionRepo.loadById(fromId),
+      rsvpStore.loadForSession(fromId),
+    ]);
+    if (planned) {
+      date.value = planned.date;
+      location.value = planned.location;
+      courtCount.value = planned.court_count;
+      allowSingles.value = planned.allow_singles;
+    }
+    // Pre-select going members
+    const goingIds = rsvps
+      .filter((r) => r.status === "going")
+      .map((r) => r.member_id);
+    if (goingIds.length > 0) {
+      selected.value = new Set(goingIds);
+    }
+  }
 }
 
 async function submit(): Promise<void> {
@@ -52,7 +79,12 @@ async function submit(): Promise<void> {
       courtCount: courtCount.value,
       allowSingles: allowSingles.value,
       memberIds: [...selected.value],
+      ...(plannedSessionId.value ? { plannedSessionId: plannedSessionId.value } : {}),
     });
+    // Best-effort: delete the planned session it was derived from
+    if (plannedSessionId.value) {
+      plannedSessionStore.delete(plannedSessionId.value).catch(() => undefined);
+    }
     // Best-effort: capture the venue for next time
     await venueRepo.add(location.value).catch(() => undefined);
     // Reset selection so a re-entry starts clean
@@ -85,6 +117,22 @@ export function NewSessionPage() {
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
       <h2 style={{ marginTop: 0 }}>新規セッション</h2>
+
+      {plannedSessionId.value && (
+        <div
+          data-testid="planned-banner"
+          style={{
+            background: "var(--bg)",
+            border: "2px solid var(--line)",
+            borderRadius: 10,
+            padding: "10px 16px",
+            marginBottom: 12,
+            fontSize: 14,
+          }}
+        >
+          📅 予定から読み込みました。内容を確認して開始してください。
+        </div>
+      )}
 
       <section class="card" style={{ marginBottom: 12 }}>
         <label style={{ display: "block", marginBottom: 12 }}>

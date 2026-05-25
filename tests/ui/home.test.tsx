@@ -1,7 +1,107 @@
-import { describe, expect, it } from "vitest";
-import { render, fireEvent } from "@testing-library/preact";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, fireEvent, waitFor } from "@testing-library/preact";
+import type { Member } from "@/engine/models";
+import type { PlannedSessionRow } from "@/data/planned-session-repository";
+import type { RsvpRow } from "@/data/rsvp-repository";
+
+const hoisted = vi.hoisted(() => {
+  return {
+    nextSignal: null as unknown as import("@preact/signals").Signal<PlannedSessionRow | null>,
+    bySessionSignal: null as unknown as import("@preact/signals").Signal<Map<string, RsvpRow[]>>,
+    allMembersSignal: null as unknown as import("@preact/signals").Signal<Member[]>,
+    activeMembersSignal: null as unknown as import("@preact/signals").Signal<Member[]>,
+    isAdminSignal: null as unknown as import("@preact/signals").Signal<boolean>,
+    loadNextMock: vi.fn().mockResolvedValue(undefined),
+    loadForSessionMock: vi.fn().mockResolvedValue([]),
+    rosterLoadMock: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+vi.mock("@/ui/stores", async () => {
+  const { signal, computed } = await import("@preact/signals");
+
+  const members: Member[] = [
+    { id: 1, name: "佐藤", status: "active", createdAt: new Date() },
+    { id: 2, name: "山本", status: "active", createdAt: new Date() },
+  ];
+
+  const nextSig = signal<PlannedSessionRow | null>(null);
+  const bySessionSig = signal<Map<string, RsvpRow[]>>(new Map());
+  const allSig = signal<Member[]>(members);
+  const activeSig = computed(() => allSig.value.filter(m => m.status === "active"));
+  const isAdminSig = signal<boolean>(true);
+
+  // Store references into hoisted so tests can mutate them
+  hoisted.nextSignal = nextSig;
+  hoisted.bySessionSignal = bySessionSig;
+  hoisted.allMembersSignal = allSig;
+  hoisted.activeMembersSignal = activeSig as unknown as import("@preact/signals").Signal<Member[]>;
+  hoisted.isAdminSignal = isAdminSig;
+
+  return {
+    plannedSessionStore: {
+      list: signal([]),
+      next: nextSig,
+      loading: signal(false),
+      load: vi.fn().mockResolvedValue(undefined),
+      loadNext: hoisted.loadNextMock,
+      create: vi.fn(),
+      rotateToken: vi.fn(),
+      delete: vi.fn(),
+    },
+    rsvpStore: {
+      bySession: bySessionSig,
+      loadForSession: hoisted.loadForSessionMock,
+      adminUpsert: vi.fn(),
+      publicUpsertWithToken: vi.fn(),
+      countsFor: vi.fn().mockReturnValue({ going: 0, not_going: 0, maybe: 0 }),
+      goingMemberIds: vi.fn().mockReturnValue([]),
+    },
+    rosterStore: {
+      all: allSig,
+      active: activeSig,
+      archived: computed(() => []),
+      load: hoisted.rosterLoadMock,
+      add: vi.fn(),
+      rename: vi.fn(),
+      archive: vi.fn(),
+      unarchive: vi.fn(),
+      hardDelete: vi.fn(),
+    },
+    authStore: {
+      email: signal("admin@example.com"),
+      isAdmin: isAdminSig,
+      loading: signal(false),
+      init: vi.fn(),
+      signInWithMagicLink: vi.fn(),
+      signOut: vi.fn(),
+    },
+    venueRepo: {
+      list: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockResolvedValue(undefined),
+    },
+    sessionStore: {
+      session: signal(null),
+      startNewSession: vi.fn().mockResolvedValue(undefined),
+      nextRound: vi.fn(),
+      recordWinner: vi.fn(),
+      endSession: vi.fn(),
+    },
+  };
+});
+
 import { HomePage } from "@/ui/pages/home";
 import { currentPath } from "@/ui/router";
+
+beforeEach(() => {
+  hoisted.loadNextMock.mockClear();
+  hoisted.loadForSessionMock.mockClear();
+  hoisted.rosterLoadMock.mockClear();
+  // Reset signals to defaults
+  hoisted.nextSignal.value = null;
+  hoisted.bySessionSignal.value = new Map();
+  hoisted.isAdminSignal.value = true;
+});
 
 describe("HomePage", () => {
   it("renders the GG header and next-session card", () => {
@@ -25,5 +125,52 @@ describe("HomePage", () => {
     const { getByText } = render(<HomePage />);
     fireEvent.click(getByText("セッション開始 →"));
     expect(currentPath.value).toBe("/session/new");
+  });
+
+  it("renders empty next-session state when there are no planned sessions", async () => {
+    // next.value is null by default (set in beforeEach)
+    const { getByTestId } = render(<HomePage />);
+    const card = getByTestId("next-session-card");
+    expect(card.textContent).toContain("まだ将来セッションがありません");
+  });
+
+  it("renders a planned session's date/location and going-list when present", async () => {
+    const plannedSession: PlannedSessionRow = {
+      id: "ps1",
+      date: "2025-09-10",
+      location: "Golders Hill",
+      court_count: 3,
+      allow_singles: true,
+      public_rsvp_token: "tok456",
+      show_going_list_on_public: true,
+      created_at: "2025-08-01T00:00:00Z",
+      created_by: null,
+    };
+    const goingRsvp: RsvpRow = {
+      planned_session_id: "ps1",
+      member_id: 1,
+      status: "going",
+      note: null,
+      updated_at: "2025-08-01T00:00:00Z",
+      updated_by: "admin" as const,
+      self_token: null,
+    };
+
+    hoisted.nextSignal.value = plannedSession;
+    hoisted.bySessionSignal.value = new Map([["ps1", [goingRsvp]]]);
+
+    const { getByTestId } = render(<HomePage />);
+
+    // Wait for async useEffect to run (loadNext + loadForSession)
+    await waitFor(() => {
+      const card = getByTestId("next-session-card");
+      return card.textContent?.includes("Golders Hill");
+    });
+
+    const card = getByTestId("next-session-card");
+    expect(card.textContent).toContain("2025-09-10");
+    expect(card.textContent).toContain("Golders Hill");
+    // 佐藤 (member 1) should appear in the chip list
+    expect(card.textContent).toContain("佐藤");
   });
 });
