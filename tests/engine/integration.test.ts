@@ -27,6 +27,18 @@ describe("engine integration (full session simulation)", () => {
       const seated = attendees.filter(a => !resters.some(r => k(r) === k(a)));
       const built = buildRound(seated, plan.doublesCourts, plan.singlesCourts, hist, ss, rng);
 
+      // Safety invariant: no player is double-booked across courts within a single round,
+      // and no seated player is also resting.
+      const seen = new Set<string>();
+      for (const c of built.courts) {
+        for (const r of [...c.teamA, ...c.teamB]) {
+          const key = k(r);
+          expect(seen.has(key)).toBe(false);
+          seen.add(key);
+        }
+      }
+      for (const r of resters) expect(seen.has(k(r))).toBe(false);
+
       for (const c of built.courts)
         for (const r of [...c.teamA, ...c.teamB])
           playCount.set(k(r), (playCount.get(k(r)) ?? 0) + 1);
@@ -38,8 +50,20 @@ describe("engine integration (full session simulation)", () => {
       prevResters = resters;
     }
 
-    // Invariant: max - min play count <= 1
+    // Fairness invariant: max - min play count <= 1
     const counts = attendees.map(a => playCount.get(k(a)) ?? 0);
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+  });
+
+  it("computeRankings returns empty maps when no matches fall in the window", async () => {
+    const { computeRankings } = await import("@/engine/ranking");
+    const r = computeRankings([], [], {
+      from: new Date("2026-01-01"),
+      to: new Date("2027-01-01"),
+    });
+    expect(r.elo.size).toBe(0);
+    expect(r.record.size).toBe(0);
+    expect(r.pair.size).toBe(0);
+    expect(r.attendance.size).toBe(0);
   });
 });

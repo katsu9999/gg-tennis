@@ -1,12 +1,7 @@
-import type { AttendeeRef, Court, PairHistory, Round } from "./models";
-import { pairKey } from "./models";
+import type { AttendeeRef, Court, PairHistory, SameSessionStats } from "./models";
+import { memberIdsFrom, pairKey } from "./models";
 import type { Rng } from "./rng";
 import { shuffle } from "./rng";
-
-export interface SameSessionStats {
-  partner: Map<string, number>;
-  opp: Map<string, number>;
-}
 
 const W_PARTNER = 3;
 const W_OPP = 1;
@@ -14,12 +9,8 @@ const SAME_SESSION = 8;
 const SAME_SESSION_OPP = 3;
 const K_ATTEMPTS = 300;
 
-function memberIdsOnly(refs: readonly AttendeeRef[]): number[] {
-  return refs.filter(r => r.kind === "member").map(r => (r as { kind: "member"; memberId: number }).memberId);
-}
-
 function teamPairScore(team: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): number {
-  const ids = memberIdsOnly(team);
+  const ids = memberIdsFrom(team);
   let s = 0;
   for (let i = 0; i < ids.length; i++)
     for (let j = i + 1; j < ids.length; j++) {
@@ -31,8 +22,8 @@ function teamPairScore(team: readonly AttendeeRef[], hist: PairHistory, ss: Same
 }
 
 function oppScore(a: readonly AttendeeRef[], b: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): number {
-  const ai = memberIdsOnly(a);
-  const bi = memberIdsOnly(b);
+  const ai = memberIdsFrom(a);
+  const bi = memberIdsFrom(b);
   let s = 0;
   for (const x of ai)
     for (const y of bi) {
@@ -72,6 +63,12 @@ function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameS
   return best;
 }
 
+/**
+ * Picks the freshest court arrangement for the given seated players.
+ *
+ * Returns only the court list — `Round.index` and `Round.resters` are the
+ * caller's responsibility (assembled in the session coordinator at Phase 2+).
+ */
 export function buildRound(
   seated: readonly AttendeeRef[],
   doublesCourts: number,
@@ -79,7 +76,7 @@ export function buildRound(
   hist: PairHistory,
   ss: SameSessionStats,
   rng: Rng,
-): Round {
+): { courts: Court[] } {
   let best: Court[] | null = null;
   let bestScore = Infinity;
 
@@ -106,5 +103,5 @@ export function buildRound(
     }
   }
 
-  return { index: 0, courts: best ?? [], resters: [] };
+  return { courts: best ?? [] };
 }

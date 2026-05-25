@@ -57,6 +57,17 @@ export interface PairHistory {
   opponentW: Map<string, number>;
 }
 
+/** Accumulating partner/opponent counts within a single session, weighted heavily by the round builder. */
+export interface SameSessionStats {
+  partner: Map<string, number>;
+  opp: Map<string, number>;
+}
+
 export function pairKey(a: MemberId, b: MemberId): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+/** Extract member ids (canonical sentinel) from a list of attendees; guests are silently dropped. */
+export function memberIdsFrom(refs: readonly AttendeeRef[]): MemberId[] {
+  return refs.filter((r): r is { kind: "member"; memberId: MemberId } => r.kind === "member").map(r => r.memberId);
 }

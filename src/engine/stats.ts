@@ -1,12 +1,7 @@
-import type { Court, PairHistory, MemberId } from "./models";
-import { pairKey } from "./models";
-import type { SameSessionStats } from "./round-builder";
+import type { Court, PairHistory, SameSessionStats } from "./models";
+import { memberIdsFrom, pairKey } from "./models";
 
 export const LAMBDA_DEFAULT = 0.7;
-
-function memberIds(refs: readonly { kind: string; memberId?: MemberId }[]): MemberId[] {
-  return refs.filter(r => r.kind === "member" && typeof r.memberId === "number").map(r => r.memberId as MemberId);
-}
 
 function bump(map: Map<string, number>, key: string, by = 1): void {
   map.set(key, (map.get(key) ?? 0) + by);
@@ -14,8 +9,8 @@ function bump(map: Map<string, number>, key: string, by = 1): void {
 
 export function applyRoundToHistory(hist: PairHistory, courts: readonly Court[]): void {
   for (const c of courts) {
-    const A = memberIds(c.teamA);
-    const B = memberIds(c.teamB);
+    const A = memberIdsFrom(c.teamA);
+    const B = memberIdsFrom(c.teamB);
     for (let i = 0; i < A.length; i++) {
       for (let j = i + 1; j < A.length; j++) {
         bump(hist.partnerW, pairKey(A[i]!, A[j]!));
@@ -36,8 +31,8 @@ export function applyRoundToHistory(hist: PairHistory, courts: readonly Court[])
 
 export function applyRoundToSameSession(ss: SameSessionStats, courts: readonly Court[]): void {
   for (const c of courts) {
-    const A = memberIds(c.teamA);
-    const B = memberIds(c.teamB);
+    const A = memberIdsFrom(c.teamA);
+    const B = memberIdsFrom(c.teamB);
     for (let i = 0; i < A.length; i++) {
       for (let j = i + 1; j < A.length; j++) {
         bump(ss.partner, pairKey(A[i]!, A[j]!));

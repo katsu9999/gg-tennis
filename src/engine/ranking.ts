@@ -1,4 +1,5 @@
 import type { MatchResult, MemberId } from "./models";
+import { pairKey } from "./models";
 
 export const ELO_INITIAL = 1500;
 export const ELO_K = 24;
@@ -27,10 +28,6 @@ export interface RankingStats {
   record: Map<MemberId, { win: number; loss: number }>;
   pair: Map<string, PairWinRate>; // canonical pairKey
   attendance: Map<MemberId, number>;
-}
-
-function pairKeyArr(ids: readonly MemberId[]): string {
-  return [...ids].sort((a, b) => a - b).join("+");
 }
 
 export function computeRankings(
@@ -86,7 +83,7 @@ export function computeRankings(
     const updatePair = (team: readonly MemberId[], won: boolean) => {
       for (let i = 0; i < team.length; i++) {
         for (let j = i + 1; j < team.length; j++) {
-          const k = pairKeyArr([team[i]!, team[j]!]);
+          const k = pairKey(team[i]!, team[j]!);
           const p = pair.get(k) ?? { win: 0, loss: 0 };
           if (won) p.win++;
           else p.loss++;
