@@ -22,7 +22,7 @@ interface FormState {
 
 const initialForm = (): FormState => ({
   date: new Date().toISOString().slice(0, 10),
-  location: "",
+  location: "Hendon",
   courtCount: 3,
   allowSingles: true,
   showGoingListOnPublic: true,

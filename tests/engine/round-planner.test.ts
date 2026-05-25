@@ -15,6 +15,13 @@ describe("planRound (§6.1)", () => {
     [4, 1, true, 1, 0, 4, 0],
     [3, 1, true, 0, 1, 2, 1],
     [2, 1, true, 0, 1, 2, 0],
+    // v1.1: court-utilisation fix — when more courts are picked than full
+    // doubles can fill, prefer using more singles courts.
+    [6, 3, true, 0, 3, 6, 0],   // 6 people, 3 courts → 3 singles (was 1D+1S)
+    [8, 3, true, 1, 2, 8, 0],   // 8 people, 3 courts → 1D + 2S (was 2D, 1 empty)
+    [6, 4, true, 0, 3, 6, 0],   // 6 people, 4 courts → only 3 courts fit
+    [5, 3, true, 0, 2, 4, 1],   // 5 people, 3 courts → 2S, 1 rests
+    [7, 3, true, 0, 3, 6, 1],   // 7 people, 3 courts → 3S, 1 rests
   ])(
     "N=%i C=%i singles=%s → D=%i S=%i seated=%i resters=%i",
     (n, c, allow, d, s, seat, rest) => {
@@ -32,6 +39,19 @@ describe("planRound (§6.1)", () => {
         const p = planRound(n, c, true);
         expect(p.seated + p.resters).toBe(n);
         expect(p.doublesCourts + p.singlesCourts).toBeLessThanOrEqual(c);
+      }
+    }
+  });
+
+  it("uses as many of the available courts as the attendees allow", () => {
+    // When there are enough pairs, we should fill every court (no idle court
+    // sitting empty while people rest unnecessarily).
+    for (let n = 2; n <= 24; n++) {
+      for (let c = 1; c <= 6; c++) {
+        const p = planRound(n, c, true);
+        const courtsUsed = p.doublesCourts + p.singlesCourts;
+        const maxPossibleCourts = Math.min(c, Math.floor(n / 2));
+        expect(courtsUsed).toBe(maxPossibleCourts);
       }
     }
   });
