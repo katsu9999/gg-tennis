@@ -167,6 +167,29 @@ If anything in steps 4–8 misbehaves, that's a real bug.
 - **Privacy page** at `/privacy` — bilingual (日本語 / English) UK GDPR notice; no user input, no cookie banner required.
 - **Settings page** at `/settings` — account status, outdoor-mode guidance, link to privacy notice.
 
+## Deployment (GitHub Pages)
+
+### One-time setup (operator)
+
+1. Push the repo to GitHub: `git remote add origin git@github.com:<user>/gg-tennis-shuffle.git && git push -u origin main`.
+2. Settings → **Pages** → Source = "GitHub Actions".
+3. Settings → **Secrets and variables** → **Actions**:
+   - Secret `VITE_SUPABASE_URL` = your project URL
+   - Secret `VITE_SUPABASE_ANON_KEY` = your anon key
+4. Settings → **Variables** → optional:
+   - Variable `VITE_BASE_URL` = `/gg-tennis-shuffle/` if hosting from a repo path; leave unset (defaults to `/`) for a custom domain.
+5. Push to `main` triggers the deploy workflow. The first deploy can take ~5 min.
+
+### Custom domain (optional)
+
+1. Create `public/CNAME` containing your domain (e.g. `gg.example.com`).
+2. Configure DNS: `CNAME gg → <user>.github.io.`
+3. Leave `VITE_BASE_URL` unset (defaults to `/`).
+
+### How SPA routing works on GitHub Pages
+
+The workflow copies `dist/index.html` → `dist/404.html` so deep links like `/rsvp/abc123` return the SPA bundle instead of a 404. The client router then handles the in-app route. This is the standard "404 trick" for GitHub Pages SPAs.
+
 ## Roadmap
 
 - **v1 (this branch):** Web/PWA on GitHub Pages + Supabase. URL-only access.

@@ -1,5 +1,15 @@
 import { signal } from "@preact/signals";
 
+// Strip the Vite base path so route matching always works against bare paths
+// like "/login" regardless of whether the app is hosted at "/" or at
+// "/gg-tennis-shuffle/". When BASE_URL is "/" (default), stripBase is a no-op.
+const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, ""); // e.g. "/gg-tennis-shuffle" or ""
+
+export function stripBase(path: string): string {
+  if (BASE && path.startsWith(BASE)) return path.slice(BASE.length) || "/";
+  return path;
+}
+
 export type Route =
   | { name: "home" }
   | { name: "login" }
@@ -36,18 +46,19 @@ export function matchRoute(path: string): Route {
 }
 
 export const currentPath = signal(
-  typeof location !== "undefined" ? location.pathname : "/",
+  typeof location !== "undefined" ? stripBase(location.pathname) : "/",
 );
 
 export function navigate(to: string): void {
+  const full = BASE + (to.startsWith("/") ? to : "/" + to);
   if (typeof history !== "undefined") {
-    history.pushState(null, "", to);
+    history.pushState(null, "", full);
   }
-  currentPath.value = to;
+  currentPath.value = to; // store the canonical (base-stripped) path
 }
 
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
-    currentPath.value = location.pathname;
+    currentPath.value = stripBase(location.pathname);
   });
 }
