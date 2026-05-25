@@ -12,6 +12,7 @@ import { RoundPage } from "@/ui/pages/round";
 import { HistoryPage } from "@/ui/pages/history";
 import { RosterPage } from "@/ui/pages/roster";
 import { PlannedSessionsPage } from "@/ui/pages/planned-sessions";
+import { PublicRsvpPage } from "@/ui/pages/public-rsvp";
 
 const route = computed(() => matchRoute(currentPath.value));
 
@@ -36,6 +37,7 @@ function App() {
     case "history": return <HistoryPage />;
     case "roster": return <RosterPage />;
     case "planned-sessions": return <PlannedSessionsPage />;
+    case "public-rsvp": return <PublicRsvpPage token={r.params.token} />;
     default:
       return <ComingSoon name={r.name} />;
   }
