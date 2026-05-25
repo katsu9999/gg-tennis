@@ -8,6 +8,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    coverage: { reporter: ["text", "html"], lines: 80, statements: 80, branches: 75 },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      include: ["src/engine/**", "src/data/**", "src/state/**"],
+      exclude: ["src/main.tsx", "src/ui/**", "src/sw.ts", "**/*.d.ts"],
+      thresholds: { lines: 80, statements: 80, branches: 75 },
+    },
   },
 });
