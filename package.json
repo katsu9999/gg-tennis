@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/generate-placeholder-icons.mjs && vite",
+    "prebuild": "node scripts/generate-placeholder-icons.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -34,6 +35,8 @@
     "jsdom": "^24.0.0",
     "typescript": "^5.4.0",
     "vite": "^5.2.0",
-    "vitest": "^1.6.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^1.6.0",
+    "workbox-window": "^7.4.1"
   }
 }

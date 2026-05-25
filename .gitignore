@@ -11,3 +11,4 @@ coverage/
 .vscode/
 .superpowers/
 *.tsbuildinfo
+public/icons/*.png

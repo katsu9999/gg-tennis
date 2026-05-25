@@ -15,6 +15,8 @@ import { PlannedSessionsPage } from "@/ui/pages/planned-sessions";
 import { PublicRsvpPage } from "@/ui/pages/public-rsvp";
 import { RankingPage } from "@/ui/pages/ranking";
 import { PastSessionsPage } from "@/ui/pages/past-sessions";
+import { PrivacyPage } from "@/ui/pages/privacy";
+import { SettingsPage } from "@/ui/pages/settings";
 
 const route = computed(() => matchRoute(currentPath.value));
 
@@ -42,8 +44,10 @@ function App() {
     case "public-rsvp": return <PublicRsvpPage token={r.params.token} />;
     case "ranking": return <RankingPage />;
     case "past-sessions": return <PastSessionsPage />;
+    case "privacy": return <PrivacyPage />;
+    case "settings": return <SettingsPage />;
     default:
-      return <ComingSoon name={r.name} />;
+      return <ComingSoon name={(r as { name: string }).name} />;
   }
 }
 
