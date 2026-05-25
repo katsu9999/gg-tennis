@@ -112,10 +112,14 @@ describe("PlannedSessionsPage", () => {
     expect(getByText(/まだ将来セッションがありません/)).toBeDefined();
   });
 
-  it("create button is disabled when location is empty", () => {
+  it("create button is disabled when location is cleared", () => {
     const { getByTestId } = render(<PlannedSessionsPage />);
     const btn = getByTestId("planned-create") as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    // Default location is "Hendon" — button starts enabled.
+    expect(btn.disabled).toBe(false);
+    // Clearing the location disables it.
+    fireEvent.input(getByTestId("planned-location"), { target: { value: "" } });
+    expect((getByTestId("planned-create") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("filling form and clicking create calls plannedSessionStore.create with PIN", async () => {

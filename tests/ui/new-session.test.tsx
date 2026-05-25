@@ -137,10 +137,13 @@ describe("NewSessionPage", () => {
   });
 
   it("submit is disabled until at least 2 members and location are set", async () => {
-    const { getByText, findByTestId } = render(<NewSessionPage />);
+    const { getByText, findByTestId, container } = render(<NewSessionPage />);
     const btn = getByText(/次へ：番号を抽選/).closest("button")!;
+    // No members selected yet → disabled even though Hendon is the default location.
     expect(btn.disabled).toBe(true);
-    // Select 2 members but no location
+    // Clear the default location and pick 2 members → still disabled.
+    const locInput = container.querySelector('input[type="text"]') as HTMLInputElement;
+    fireEvent.input(locInput, { target: { value: "" } });
     fireEvent.click(await findByTestId("member-1"));
     fireEvent.click(await findByTestId("member-2"));
     expect(btn.disabled).toBe(true);

@@ -18,8 +18,10 @@ import { getFromParam } from "@/ui/location";
 // remain. Reset is explicit (via the back button or successful submission).
 const today = () => new Date().toISOString().slice(0, 10);
 
+const DEFAULT_LOCATION = "Hendon";
+
 const date = signal(today());
-const location = signal("");
+const location = signal(DEFAULT_LOCATION);
 const courtCount = signal(3);
 const allowSingles = signal(true);
 const selected = signal<Set<number>>(new Set());
@@ -32,7 +34,7 @@ const plannedSessionId = signal<string | null>(null);
 /** Reset all form state to defaults. Called by tests in beforeEach. */
 export function resetFormState(): void {
   date.value = today();
-  location.value = "";
+  location.value = DEFAULT_LOCATION;
   courtCount.value = 3;
   allowSingles.value = true;
   selected.value = new Set();
