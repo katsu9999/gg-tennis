@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Member, Attendee, Court, Round, MatchResult } from "@/engine/models";
+import { pairKey } from "@/engine/models";
 
 describe("domain models", () => {
   it("Member has stable identity and status union", () => {
@@ -24,5 +25,26 @@ describe("domain models", () => {
     };
     expect(c.type).toBe("doubles");
     expect(c.winner).toBe("none");
+  });
+
+  it("Round groups courts and resters by round index", () => {
+    const r: Round = { index: 2, courts: [], resters: [{ kind: "member", memberId: 9 }] };
+    expect(r.index).toBe(2);
+    expect(r.resters).toHaveLength(1);
+  });
+
+  it("MatchResult uses member-id arrays and excludes 'none' winner", () => {
+    const m: MatchResult = {
+      sessionId: "s1", roundIndex: 0, courtType: "doubles",
+      teamA: [1, 2], teamB: [3, 4], winner: "A", at: new Date("2026-06-01"),
+    };
+    expect(m.winner).toBe("A");
+    expect(m.teamA).toEqual([1, 2]);
+  });
+
+  it("pairKey canonicalizes order (smaller id first)", () => {
+    expect(pairKey(2, 1)).toBe(pairKey(1, 2));
+    expect(pairKey(2, 1)).toBe("1:2");
+    expect(pairKey(5, 5)).toBe("5:5");
   });
 });
