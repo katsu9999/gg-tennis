@@ -1,15 +1,19 @@
 import { signal, type Signal } from "@preact/signals";
 import type { PlannedSessionRepository, PlannedSessionRow } from "@/data/planned-session-repository";
 
+/**
+ * v1.1 Model A: write methods accept a `pin` argument; UI pulls it from
+ * `pinStore.getPin()` after the user has unlocked.
+ */
 export interface PlannedSessionStore {
   list: Signal<PlannedSessionRow[]>;
   next: Signal<PlannedSessionRow | null>;
   loading: Signal<boolean>;
   load(): Promise<void>;
   loadNext(): Promise<void>;
-  create(input: Omit<PlannedSessionRow, "id" | "created_at">): Promise<PlannedSessionRow>;
-  rotateToken(id: string): Promise<string>;
-  delete(id: string): Promise<void>;
+  create(input: Omit<PlannedSessionRow, "id" | "created_at">, pin: string): Promise<PlannedSessionRow>;
+  rotateToken(id: string, pin: string): Promise<string>;
+  delete(id: string, pin: string): Promise<void>;
 }
 
 export function createPlannedSessionStore(repo: PlannedSessionRepository): PlannedSessionStore {
@@ -32,21 +36,21 @@ export function createPlannedSessionStore(repo: PlannedSessionRepository): Plann
     async loadNext() {
       next.value = await repo.loadNext();
     },
-    async create(input) {
-      const created = await repo.create(input);
+    async create(input, pin) {
+      const created = await repo.create(input, pin);
       list.value = [...list.value, created];
       return created;
     },
-    async rotateToken(id) {
-      const token = await repo.rotateToken(id);
+    async rotateToken(id, pin) {
+      const token = await repo.rotateToken(id, pin);
       list.value = list.value.map(r =>
         r.id === id ? { ...r, public_rsvp_token: token } : r,
       );
       if (next.value?.id === id) next.value = { ...next.value, public_rsvp_token: token };
       return token;
     },
-    async delete(id) {
-      await repo.delete(id);
+    async delete(id, pin) {
+      await repo.delete(id, pin);
       list.value = list.value.filter(r => r.id !== id);
       if (next.value?.id === id) next.value = null;
     },

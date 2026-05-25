@@ -4,6 +4,10 @@
  *
  * In tests, mock this whole module via `vi.mock("@/ui/stores", ...)` to provide
  * fakes. That sidesteps the `import.meta.env` requirement of supabase-client.
+ *
+ * v1.1: Model A — no persistent auth. The legacy `authStore` was replaced by
+ * `hostStore` (identifies who started today's session, label only) and
+ * `pinStore` (gates destructive operations behind the shared club PIN).
  */
 import { supabase } from "@/data/supabase-client";
 import { createMemberRepository } from "@/data/member-repository";
@@ -14,7 +18,9 @@ import { createSessionRepository } from "@/data/session-repository";
 import { createPlannedSessionRepository } from "@/data/planned-session-repository";
 import { createRsvpRepository } from "@/data/rsvp-repository";
 
-import { createAuthStore } from "@/state/auth-store";
+import { createHostStore } from "@/state/host-store";
+import { createPinStore } from "@/state/pin-store";
+import { createLiveSessionStore } from "@/state/live-session-store";
 import { createRosterStore } from "@/state/roster-store";
 import { createSessionStore } from "@/state/session-store";
 import { createPlannedSessionStore } from "@/state/planned-session-store";
@@ -31,7 +37,9 @@ export const plannedSessionRepo = createPlannedSessionRepository(supabase);
 export const rsvpRepo = createRsvpRepository(supabase);
 
 // Stores
-export const authStore = createAuthStore(supabase);
+export const hostStore = createHostStore();
+export const pinStore = createPinStore(supabase);
+export const liveSessionStore = createLiveSessionStore(supabase, sessionRepo);
 export const rosterStore = createRosterStore(memberRepo);
 export const sessionStore = createSessionStore({ sessionRepo, historyRepo, matchLogRepo });
 export const plannedSessionStore = createPlannedSessionStore(plannedSessionRepo);

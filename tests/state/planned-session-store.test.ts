@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlannedSessionStore } from "@/state/planned-session-store";
 import type { PlannedSessionRepository, PlannedSessionRow } from "@/data/planned-session-repository";
 
+const PIN = "test-pin";
+
 function makeRow(overrides: Partial<PlannedSessionRow> = {}): PlannedSessionRow {
   return {
     id: "ps-1",
@@ -53,8 +55,9 @@ describe("planned-session store", () => {
     expect(store.next.value?.id).toBe("ps-1");
   });
 
-  it("create() appends to list and returns the created row", async () => {
-    const store = createPlannedSessionStore(makeRepo());
+  it("create() appends to list, returns the created row, forwards PIN", async () => {
+    const repo = makeRepo();
+    const store = createPlannedSessionStore(repo);
     await store.load();
     const created = await store.create({
       date: "2026-07-01",
@@ -64,27 +67,32 @@ describe("planned-session store", () => {
       public_rsvp_token: null,
       show_going_list_on_public: false,
       created_by: null,
-    });
+    }, PIN);
     expect(created.id).toBe("ps-new");
     expect(store.list.value).toHaveLength(2);
     expect(store.list.value.find(r => r.id === "ps-new")).toBeDefined();
+    expect(repo.create).toHaveBeenCalledWith(expect.any(Object), PIN);
   });
 
   it("rotateToken() updates the row's token in list and next", async () => {
-    const store = createPlannedSessionStore(makeRepo());
+    const repo = makeRepo();
+    const store = createPlannedSessionStore(repo);
     await store.load();
     await store.loadNext();
-    await store.rotateToken("ps-1");
+    await store.rotateToken("ps-1", PIN);
     expect(store.list.value[0]!.public_rsvp_token).toBe("tok-new");
     expect(store.next.value?.public_rsvp_token).toBe("tok-new");
+    expect(repo.rotateToken).toHaveBeenCalledWith("ps-1", PIN);
   });
 
   it("delete() removes the row from list and clears next if matched", async () => {
-    const store = createPlannedSessionStore(makeRepo());
+    const repo = makeRepo();
+    const store = createPlannedSessionStore(repo);
     await store.load();
     await store.loadNext();
-    await store.delete("ps-1");
+    await store.delete("ps-1", PIN);
     expect(store.list.value).toHaveLength(0);
     expect(store.next.value).toBeNull();
+    expect(repo.delete).toHaveBeenCalledWith("ps-1", PIN);
   });
 });

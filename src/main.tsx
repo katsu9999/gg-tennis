@@ -5,7 +5,6 @@ import "@/ui/theme.css";
 
 // Phase 4+ pages — added incrementally
 import { HomePage } from "@/ui/pages/home";
-import { LoginPage } from "@/ui/pages/login";
 import { NewSessionPage } from "@/ui/pages/new-session";
 import { NumberMapPage } from "@/ui/pages/number-map";
 import { RoundPage } from "@/ui/pages/round";
@@ -34,7 +33,6 @@ function App() {
   const r = route.value;
   switch (r.name) {
     case "home": return <HomePage />;
-    case "login": return <LoginPage />;
     case "new-session": return <NewSessionPage />;
     case "number-map": return <NumberMapPage />;
     case "round": return <RoundPage />;

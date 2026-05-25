@@ -80,6 +80,8 @@ describe("NumberMapPage", () => {
       todayStats: new Map(),
       prevResters: [],
       rngSeed: 0,
+      hostToken: null,
+      hostLabel: null,
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("1")).toBeDefined();
@@ -103,6 +105,8 @@ describe("NumberMapPage", () => {
       todayStats: new Map(),
       prevResters: [],
       rngSeed: 0,
+      hostToken: null,
+      hostLabel: null,
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("#99")).toBeDefined();
@@ -123,6 +127,8 @@ describe("NumberMapPage", () => {
       todayStats: new Map(),
       prevResters: [],
       rngSeed: 0,
+      hostToken: null,
+      hostLabel: null,
     };
     const { getByText } = render(<NumberMapPage />);
     fireEvent.click(getByText(/ラウンド開始/));

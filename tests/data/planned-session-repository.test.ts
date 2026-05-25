@@ -12,7 +12,7 @@ const samplePlanned: PlannedSessionRow = {
   public_rsvp_token: "tok-abc",
   show_going_list_on_public: true,
   created_at: "2026-05-25T08:00:00Z",
-  created_by: "admin@example.com",
+  created_by: null,
 };
 
 describe("PlannedSessionRepository", () => {
@@ -40,12 +40,27 @@ describe("PlannedSessionRepository", () => {
     expect(result).toBeNull();
   });
 
-  it("rotateToken updates public_rsvp_token and returns new token string", async () => {
-    const c = fakeClient({ planned_sessions: {} });
+  it("rotateToken calls rotate_public_rsvp_token RPC with PIN", async () => {
+    const c = fakeClient(
+      { planned_sessions: {} },
+      { rotate_public_rsvp_token: { data: "new-token" } },
+    );
     const repo = createPlannedSessionRepository(c);
-    const token = await repo.rotateToken("ps-uuid-1");
-    expect(typeof token).toBe("string");
-    expect(token.length).toBeGreaterThan(0);
-    expect(c.from).toHaveBeenCalledWith("planned_sessions");
+    const token = await repo.rotateToken("ps-uuid-1", "test-pin");
+    expect(token).toBe("new-token");
+    expect(c.rpc).toHaveBeenCalledWith("rotate_public_rsvp_token", {
+      p_pin: "test-pin",
+      p_id: "ps-uuid-1",
+    });
+  });
+
+  it("delete calls delete_planned_session RPC with PIN", async () => {
+    const c = fakeClient({ planned_sessions: {} }, { delete_planned_session: {} });
+    const repo = createPlannedSessionRepository(c);
+    await repo.delete("ps-uuid-1", "test-pin");
+    expect(c.rpc).toHaveBeenCalledWith("delete_planned_session", {
+      p_pin: "test-pin",
+      p_id: "ps-uuid-1",
+    });
   });
 });

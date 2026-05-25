@@ -21,6 +21,10 @@ export interface SessionRow {
   next_today_number: number;
   current_round_index: number;
   created_at: string;
+  /** v1.1: LocalStorage token of whoever started this session. Label only. */
+  host_token?: string | null;
+  /** v1.1: display name supplied by the host (optional). */
+  host_label?: string | null;
 }
 
 export interface SessionRepository {

@@ -36,20 +36,19 @@ vi.mock("@/ui/stores", async () => {
         all.value = all.value.filter((m) => m.id !== id);
       }),
     },
-    authStore: {
-      email: signal("admin@example.com"),
-      isAdmin: signal(true),
-      loading: signal(false),
-      init: vi.fn(),
-      signInWithMagicLink: vi.fn(),
-      signOut: vi.fn(),
+    pinStore: {
+      isUnlocked: signal(true),  // Default: PIN is already unlocked in tests.
+      verifying: signal(false),
+      verify: vi.fn().mockResolvedValue(true),
+      getPin: vi.fn().mockReturnValue("test-pin"),
+      lock: vi.fn(),
     },
   };
 });
 
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { RosterPage, resetRosterState } from "@/ui/pages/roster";
-import { rosterStore, authStore } from "@/ui/stores";
+import { rosterStore, pinStore } from "@/ui/stores";
 import { exportMemberData } from "@/data/gdpr-export";
 
 const r = rosterStore as unknown as {
@@ -60,7 +59,10 @@ const r = rosterStore as unknown as {
   hardDelete: ReturnType<typeof vi.fn>;
   all: { value: { id: number; name: string; status: "active" | "archived" }[] };
 };
-const a = authStore as unknown as { isAdmin: { value: boolean } };
+const p = pinStore as unknown as {
+  isUnlocked: { value: boolean };
+  getPin: ReturnType<typeof vi.fn>;
+};
 const exp = exportMemberData as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -71,7 +73,8 @@ beforeEach(() => {
   r.unarchive.mockClear();
   r.hardDelete.mockClear();
   exp.mockClear();
-  a.isAdmin.value = true;
+  p.isUnlocked.value = true;
+  p.getPin.mockReturnValue("test-pin");
   r.all.value = [
     { id: 1, name: "佐藤", status: "active" },
     { id: 2, name: "山本", status: "active" },
@@ -80,12 +83,6 @@ beforeEach(() => {
 });
 
 describe("RosterPage", () => {
-  it("shows admin-only notice when isAdmin is false", () => {
-    a.isAdmin.value = false;
-    const { getByText } = render(<RosterPage />);
-    expect(getByText(/名簿の編集は幹事のみ/)).toBeDefined();
-  });
-
   it("renders active and archived sections with member names", () => {
     const { getByText, getByTestId } = render(<RosterPage />);
     expect(getByTestId("row-1")).toBeDefined();
@@ -95,23 +92,23 @@ describe("RosterPage", () => {
     expect(getByText("田中")).toBeDefined();
   });
 
-  it("adding a new member calls rosterStore.add", async () => {
+  it("adding a new member calls rosterStore.add with name and PIN", async () => {
     const { getByTestId } = render(<RosterPage />);
     fireEvent.input(getByTestId("new-member-input"), { target: { value: "新規会員" } });
     fireEvent.click(getByTestId("new-member-add"));
-    await waitFor(() => expect(r.add).toHaveBeenCalledWith("新規会員"));
+    await waitFor(() => expect(r.add).toHaveBeenCalledWith("新規会員", "test-pin"));
   });
 
   it("clicking archive on an active member calls rosterStore.archive", async () => {
     const { getByTestId } = render(<RosterPage />);
     fireEvent.click(getByTestId("archive-1"));
-    await waitFor(() => expect(r.archive).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(r.archive).toHaveBeenCalledWith(1, "test-pin"));
   });
 
   it("clicking unarchive on an archived member calls rosterStore.unarchive", async () => {
     const { getByTestId } = render(<RosterPage />);
     fireEvent.click(getByTestId("unarchive-3"));
-    await waitFor(() => expect(r.unarchive).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(r.unarchive).toHaveBeenCalledWith(3, "test-pin"));
   });
 
   it("rename flow: switch to input, edit, save, calls rosterStore.rename", async () => {
@@ -119,7 +116,7 @@ describe("RosterPage", () => {
     fireEvent.click(getByTestId("rename-1"));
     fireEvent.input(getByTestId("rename-input-1"), { target: { value: "佐藤改" } });
     fireEvent.click(getByTestId("rename-save-1"));
-    await waitFor(() => expect(r.rename).toHaveBeenCalledWith(1, "佐藤改"));
+    await waitFor(() => expect(r.rename).toHaveBeenCalledWith(1, "佐藤改", "test-pin"));
   });
 
   it("export button calls exportMemberData with the right id", async () => {
@@ -139,7 +136,7 @@ describe("RosterPage", () => {
     const { getByTestId, queryByTestId } = render(<RosterPage />);
     fireEvent.click(getByTestId("delete-1"));
     fireEvent.click(getByTestId("delete-confirm"));
-    await waitFor(() => expect(r.hardDelete).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(r.hardDelete).toHaveBeenCalledWith(1, "test-pin"));
     await waitFor(() => expect(queryByTestId("delete-modal")).toBeNull());
   });
 });

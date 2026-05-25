@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import { rosterStore, authStore } from "@/ui/stores";
+import { rosterStore, pinStore } from "@/ui/stores";
+import { useRequirePin } from "@/ui/components/pin-modal";
 import { exportMemberData } from "@/data/gdpr-export";
 
 // Module-scoped UI state
@@ -19,13 +20,19 @@ export function resetRosterState(): void {
   busy.value = false;
 }
 
+function requirePin(): string {
+  const pin = pinStore.getPin();
+  if (!pin) throw new Error("PIN がロックされています");
+  return pin;
+}
+
 async function add(): Promise<void> {
   const v = newName.value.trim();
   if (!v) return;
   busy.value = true;
   error.value = null;
   try {
-    await rosterStore.add(v);
+    await rosterStore.add(v, requirePin());
     newName.value = "";
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
@@ -42,8 +49,32 @@ async function submitRename(): Promise<void> {
   busy.value = true;
   error.value = null;
   try {
-    await rosterStore.rename(r.id, v);
+    await rosterStore.rename(r.id, v, requirePin());
     renaming.value = null;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function doArchive(id: number): Promise<void> {
+  busy.value = true;
+  error.value = null;
+  try {
+    await rosterStore.archive(id, requirePin());
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function doUnarchive(id: number): Promise<void> {
+  busy.value = true;
+  error.value = null;
+  try {
+    await rosterStore.unarchive(id, requirePin());
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -57,7 +88,7 @@ async function doHardDelete(): Promise<void> {
   busy.value = true;
   error.value = null;
   try {
-    await rosterStore.hardDelete(c.id);
+    await rosterStore.hardDelete(c.id, requirePin());
     confirmingDelete.value = null;
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
@@ -92,10 +123,12 @@ function MemberRow({
   id,
   name,
   isArchived,
+  gate,
 }: {
   id: number;
   name: string;
   isArchived: boolean;
+  gate(fn: () => void | Promise<void>): void;
 }) {
   const isRenaming = renaming.value?.id === id;
   return (
@@ -138,7 +171,7 @@ function MemberRow({
             <button
               type="button"
               data-testid={`rename-save-${id}`}
-              onClick={() => { void submitRename(); }}
+              onClick={() => gate(submitRename)}
               disabled={busy.value}
               style={ghostButtonStyle}
             >
@@ -166,7 +199,7 @@ function MemberRow({
               <button
                 type="button"
                 data-testid={`unarchive-${id}`}
-                onClick={() => { void rosterStore.unarchive(id); }}
+                onClick={() => gate(() => doUnarchive(id))}
                 disabled={busy.value}
                 style={ghostButtonStyle}
               >
@@ -176,7 +209,7 @@ function MemberRow({
               <button
                 type="button"
                 data-testid={`archive-${id}`}
-                onClick={() => { void rosterStore.archive(id); }}
+                onClick={() => gate(() => doArchive(id))}
                 disabled={busy.value}
                 style={ghostButtonStyle}
               >
@@ -214,17 +247,7 @@ export function RosterPage() {
     void rosterStore.load();
   }, []);
 
-  if (!authStore.isAdmin.value) {
-    return (
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-        <h2>名簿管理</h2>
-        <p>名簿の編集は幹事のみです。</p>
-        <p>
-          <a href="/login">ログインする</a> · <a href="/">ホームへ戻る</a>
-        </p>
-      </main>
-    );
-  }
+  const { gate, modal } = useRequirePin();
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
@@ -232,6 +255,9 @@ export function RosterPage() {
 
       <section class="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>新規会員を追加</h3>
+        <p class="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+          追加・変更にはクラブ PIN が必要です。
+        </p>
         <div style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
@@ -252,7 +278,7 @@ export function RosterPage() {
             class="btn-primary"
             data-testid="new-member-add"
             disabled={busy.value || newName.value.trim().length === 0}
-            onClick={() => { void add(); }}
+            onClick={() => gate(add)}
           >
             追加
           </button>
@@ -272,7 +298,7 @@ export function RosterPage() {
         <p class="muted">アクティブ会員はまだいません。</p>
       ) : (
         rosterStore.active.value.map((m) => (
-          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={false} />
+          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={false} gate={gate} />
         ))
       )}
 
@@ -283,7 +309,7 @@ export function RosterPage() {
         <p class="muted">アーカイブされた会員はいません。</p>
       ) : (
         rosterStore.archived.value.map((m) => (
-          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={true} />
+          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={true} gate={gate} />
         ))
       )}
 
@@ -320,7 +346,7 @@ export function RosterPage() {
                 class="btn-primary"
                 data-testid="delete-confirm"
                 disabled={busy.value}
-                onClick={() => { void doHardDelete(); }}
+                onClick={() => gate(doHardDelete)}
                 style={{ flex: 1, background: "crimson", color: "white" }}
               >
                 削除する
@@ -333,6 +359,8 @@ export function RosterPage() {
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
         <a href="/">← ホーム</a>
       </p>
+
+      {modal}
     </main>
   );
 }

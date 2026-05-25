@@ -5,7 +5,6 @@ describe("matchRoute", () => {
   it.each<[string, ReturnType<typeof matchRoute>]>([
     ["/", { name: "home" }],
     ["", { name: "home" }],
-    ["/login", { name: "login" }],
     ["/roster", { name: "roster" }],
     ["/planned", { name: "planned-sessions" }],
     ["/session/new", { name: "new-session" }],
@@ -24,6 +23,7 @@ describe("matchRoute", () => {
 
   it("falls back to home for unknown paths", () => {
     expect(matchRoute("/nope")).toEqual({ name: "home" });
+    expect(matchRoute("/login")).toEqual({ name: "home" }); // v1.1: /login removed
     expect(matchRoute("/rsvp/")).toEqual({ name: "home" });
     expect(matchRoute("/rsvp/bad token")).toEqual({ name: "home" });
   });

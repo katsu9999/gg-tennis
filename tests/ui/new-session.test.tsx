@@ -7,7 +7,6 @@ const hoisted = vi.hoisted(() => {
   // We can't import from the module here; use plain objects and let the mock
   // factory use them directly.
   return {
-    isAdminValue: { current: true as boolean },
     startNewSessionMock: vi.fn().mockResolvedValue(undefined),
     venueAddMock: vi.fn().mockResolvedValue(undefined),
     venueListMock: vi.fn().mockResolvedValue(["Golders Hill", "Hampstead"]),
@@ -39,13 +38,6 @@ vi.mock("@/ui/stores", async () => {
   const allSignal = signal<Member[]>(members);
   const activeSignal = computed(() => allSignal.value.filter(m => m.status === "active"));
   const archivedSignal = computed(() => allSignal.value.filter(m => m.status === "archived"));
-  const isAdminSignal = signal(hoisted.isAdminValue.current);
-
-  // Re-sync isAdmin signal from the mutable ref on every access by wrapping
-  // in a getter so tests can update it via hoisted.isAdminValue.current.
-  // Simpler: expose the signal directly from hoisted so tests mutate it.
-  // We'll swap to that pattern — hoist the signal itself.
-  // (Signals are objects; vi.hoisted returns them by reference fine.)
 
   return {
     rosterStore: {
@@ -70,13 +62,18 @@ vi.mock("@/ui/stores", async () => {
       list: hoisted.venueListMock,
       add: hoisted.venueAddMock,
     },
-    authStore: {
-      email: signal("admin@example.com"),
-      isAdmin: isAdminSignal,
-      loading: signal(false),
-      init: vi.fn(),
-      signInWithMagicLink: vi.fn(),
-      signOut: vi.fn(),
+    hostStore: {
+      token: signal("host-token-123"),
+      label: signal("Katsu"),
+      setLabel: vi.fn(),
+      isHost: vi.fn().mockReturnValue(true),
+    },
+    pinStore: {
+      isUnlocked: signal(true),
+      verifying: signal(false),
+      verify: vi.fn().mockResolvedValue(true),
+      getPin: vi.fn().mockReturnValue("test-pin"),
+      lock: vi.fn(),
     },
     plannedSessionRepo: {
       loadById: hoisted.plannedSessionLoadByIdMock,
@@ -111,8 +108,6 @@ vi.mock("@/ui/stores", async () => {
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { NewSessionPage, resetFormState } from "@/ui/pages/new-session";
 import { currentPath } from "@/ui/router";
-// Import the mocked stores so we can access isAdmin signal directly.
-import { authStore } from "@/ui/stores";
 import type { PlannedSessionRow } from "@/data/planned-session-repository";
 import type { RsvpRow } from "@/data/rsvp-repository";
 
@@ -127,20 +122,13 @@ beforeEach(() => {
   hoisted.plannedSessionLoadByIdMock.mockResolvedValue(null);
   hoisted.rsvpLoadForSessionMock.mockResolvedValue([]);
   hoisted.getFromParamMock.mockReturnValue(null);
-  authStore.isAdmin.value = true;
   currentPath.value = "/session/new";
   // Reset module-scoped form signals between tests to prevent state leakage.
   resetFormState();
 });
 
 describe("NewSessionPage", () => {
-  it("renders admin-only notice when not signed in as admin", () => {
-    authStore.isAdmin.value = false;
-    const { getByText } = render(<NewSessionPage />);
-    expect(getByText(/幹事のみ/)).toBeDefined();
-  });
-
-  it("renders form sections when admin", async () => {
+  it("renders form sections to anyone (v1.1 Model A)", async () => {
     const { getByText, findByText } = render(<NewSessionPage />);
     await waitFor(() => expect(getByText("日付")).toBeDefined());
     expect(getByText("会場")).toBeDefined();
@@ -189,6 +177,8 @@ describe("NewSessionPage", () => {
       memberIds: expect.arrayContaining([1, 2]),
       courtCount: 3,
       allowSingles: true,
+      hostToken: "host-token-123",
+      hostLabel: "Katsu",
     }));
     // navigate() is called after the async venueRepo.add() resolves, so wait for it.
     await waitFor(() => expect(currentPath.value).toBe("/session/number-map"));
