@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GG — Tennis Court Shuffle 設計概要</title>
+<style>
+  :root{
+    --bg:#eef1ea; --ink:#0b1410; --muted:#5a6b60; --line:#d9e0d6;
+    --green:#1f8a4c; --lime:#c7f53a; --orange:#ff8a3d; --card:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Noto Sans JP',sans-serif;
+    line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px}
+  h2{font-size:27px;font-weight:900;letter-spacing:-.01em;margin:0 0 6px}
+  h3{font-size:17px;font-weight:800;margin:0 0 8px}
+  p{margin:0 0 12px}
+  .lead{color:var(--muted)}
+  section{padding:46px 0;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12px;font-weight:900;letter-spacing:.18em;color:var(--green);margin-bottom:10px}
+
+  /* hero */
+  .hero{background:radial-gradient(120% 130% at 75% 10%,#18241c 0%,#0b1410 70%);color:#fff;
+    padding:64px 0 58px;border-bottom:none}
+  .hero .icon{width:88px;height:88px;border-radius:22px;background:radial-gradient(120% 120% at 30% 20%,#23332a,#0b1410);
+    display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 14px 34px rgba(0,0,0,.4);margin-bottom:22px}
+  .hero .icon b{color:var(--lime);font-size:42px;font-weight:900;letter-spacing:-.04em}
+  .hero .icon .ball{position:absolute;width:20px;height:20px;border-radius:50%;background:var(--lime);right:11px;bottom:11px;box-shadow:inset 0 0 0 2px #0b1410}
+  .hero h1{font-size:46px;font-weight:900;letter-spacing:-.02em;margin:0 0 8px;line-height:1.05}
+  .hero h1 span{color:var(--lime)}
+  .hero .sub{font-size:18px;color:#b9c7bd;max-width:660px;margin:0}
+  .hero .pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+  .hero .pill{font-size:13px;font-weight:800;background:rgba(199,245,58,.14);color:var(--lime);
+    border:1px solid rgba(199,245,58,.3);padding:7px 14px;border-radius:99px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:18px}
+  .card{background:var(--card);border-radius:18px;padding:20px;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .card .ic{font-size:26px;margin-bottom:8px}
+  .card p{margin:0;font-size:14.5px;color:var(--muted)}
+
+  /* timeline */
+  .phase{margin-top:20px}
+  .phase .ttl{display:inline-flex;align-items:center;gap:8px;font-weight:900;font-size:14px;
+    background:var(--ink);color:#fff;padding:6px 14px;border-radius:99px;margin-bottom:14px}
+  .phase .ttl.day{background:var(--green)}
+  .tl{display:flex;gap:12px;flex-wrap:wrap}
+  .tl .node{flex:1;min-width:150px;background:var(--card);border-radius:16px;padding:16px;box-shadow:0 4px 12px rgba(0,0,0,.05);position:relative}
+  .tl .node .n{width:28px;height:28px;border-radius:50%;background:var(--lime);color:var(--ink);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+  .tl .node b{font-size:14.5px}
+  .tl .node p{font-size:13px;color:var(--muted);margin:4px 0 0}
+
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:18px}
+  .step{background:var(--card);border-radius:18px;padding:22px;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .step .no{width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--lime);font-weight:900;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+  .step p{font-size:14.5px;color:var(--muted);margin:0}
+
+  table{width:100%;border-collapse:collapse;margin-top:14px;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  th,td{padding:11px 14px;text-align:left;font-size:14px;border-bottom:1px solid var(--line)}
+  th{background:#e8ede6;font-weight:800;font-size:12.5px;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  .tag-d{background:var(--lime);color:#0b1410;font-weight:900;font-size:11px;padding:2px 8px;border-radius:6px}
+  .tag-s{background:var(--orange);color:#0b1410;font-weight:900;font-size:11px;padding:2px 8px;border-radius:6px}
+
+  /* phone mockup */
+  .showcase{display:flex;gap:34px;align-items:center;flex-wrap:wrap;margin-top:20px}
+  .showcase .text{flex:1;min-width:260px}
+  .ph{width:290px;aspect-ratio:9/19.3;border-radius:38px;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);box-shadow:0 18px 44px rgba(0,0,0,.22)}
+  .ph .h{padding:16px 18px 10px;display:flex;align-items:center;justify-content:space-between}
+  .ph .h .b{display:flex;align-items:center;gap:8px}
+  .ph .h .mini{width:32px;height:32px;border-radius:10px;background:var(--ink);color:var(--lime);font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center}
+  .ph .h .rd{font-size:21px;font-weight:900}
+  .ph .h .meta{font-size:11px;font-weight:800;color:var(--muted);background:#fff;padding:5px 11px;border-radius:99px}
+  .ph .body{flex:1;padding:4px 14px 14px;display:flex;flex-direction:column;gap:10px}
+  .cv{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.12)}
+  .cv .court{position:relative;height:90px;background:var(--green);display:flex;align-items:center}
+  .cv .frame{position:absolute;inset:8px;border:2.5px solid rgba(255,255,255,.92);border-radius:3px}
+  .cv .net{position:absolute;top:6px;bottom:6px;left:50%;width:3.5px;background:#fff;transform:translateX(-1.75px)}
+  .cv .side{flex:1;position:relative;z-index:2;display:flex;gap:7px;justify-content:center;align-items:center}
+  .cv .side.win:before{content:"✓";position:absolute;top:6px;right:8px;color:var(--lime);font-weight:900;font-size:15px}
+  .cv .side.win{background:rgba(199,245,58,.22)}
+  .cv .n{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:21px;box-shadow:0 2px 5px rgba(0,0,0,.25)}
+  .cv .n.a{background:var(--ink);color:#fff}
+  .cv .n.b{background:#fff;color:var(--ink)}
+  .cv .tagrow{position:absolute;top:7px;left:9px;right:9px;z-index:3;display:flex;justify-content:space-between;align-items:center}
+  .cv .cnum{font-size:11px;font-weight:900;color:#fff;background:rgba(0,0,0,.32);padding:2px 8px;border-radius:6px}
+  .ph .rest{display:flex;align-items:center;gap:8px;padding:2px 4px}
+  .ph .rest .l{font-size:12px;font-weight:800;color:var(--muted)}
+  .ph .rest .n{width:32px;height:32px;border-radius:10px;background:#dfe4dc;color:var(--muted);font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .ph .cta{margin-top:auto;background:var(--ink);color:#fff;border-radius:16px;padding:14px;text-align:center;font-weight:900;font-size:16px}
+  .ph .cta .a{color:var(--lime)}
+
+  /* ranking mock */
+  .rankwrap{display:flex;gap:24px;flex-wrap:wrap;margin-top:18px}
+  .rankcard{flex:1;min-width:280px;background:var(--card);border-radius:18px;padding:18px;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .rankcard h3{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .rankcard .tabs{display:flex;gap:6px;margin-bottom:12px}
+  .rankcard .tab{font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px;background:#e8ede6;color:var(--muted)}
+  .rankcard .tab.on{background:var(--ink);color:#fff}
+  .rrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .rrow:last-child{border-bottom:none}
+  .rrow .rk{width:24px;font-weight:900;color:var(--muted);text-align:center}
+  .rrow .rk.top{color:var(--green)}
+  .rrow .nm{flex:1;font-weight:700;font-size:14.5px}
+  .rrow .val{font-weight:900;font-size:15px}
+  .rrow .wl{font-size:12px;color:var(--muted);width:54px;text-align:right}
+  .rrow .delta{font-size:12px;font-weight:800;width:20px}
+  .rrow .up{color:var(--green)} .rrow .down{color:#c0573f}
+
+  .palette{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+  .sw{border-radius:14px;overflow:hidden;width:130px;box-shadow:0 4px 12px rgba(0,0,0,.06);background:#fff}
+  .sw .chip{height:60px}
+  .sw .cap{padding:8px 10px;font-size:12px}
+  .sw .cap b{display:block;font-size:12.5px}
+  .sw .cap span{color:var(--muted);font-size:11px}
+
+  .principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:18px}
+  .pr{background:var(--card);border-radius:16px;padding:18px;border-left:5px solid var(--lime);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+  .pr h3{font-size:15px;margin-bottom:6px}
+  .pr p{font-size:14px;color:var(--muted);margin:0}
+
+  .idbox{background:var(--card);border-radius:18px;padding:22px;margin-top:18px;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .idflow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .idflow .b{background:#eef7f0;border:1px solid #c9e7d3;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:700;flex:1;min-width:150px}
+  .idflow .b small{display:block;font-weight:600;color:var(--muted);margin-top:3px}
+  .idflow .ar{color:var(--green);font-weight:900;font-size:20px}
+
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:18px}
+  .fbox{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:10px 14px;font-weight:800;font-size:13.5px}
+  .farrow{font-size:20px;color:var(--green);font-weight:900}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  .cols .box{border-radius:18px;padding:20px}
+  .cols .in{background:#eaf6ee;border:1px solid #c9e7d3}
+  .cols .out{background:#f4f1ec;border:1px solid #e3ddd2}
+  .cols h3{display:flex;align-items:center;gap:8px}
+  .cols ul{margin:6px 0 0;padding-left:20px}
+  .cols li{font-size:14px;margin-bottom:6px}
+  @media(max-width:640px){.cols{grid-template-columns:1fr}}
+
+  footer{padding:34px 0 60px;color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="icon"><b>GG</b><span class="ball"></span></div>
+    <h1><span>GG</span> — Tennis Court Shuffle</h1>
+    <p class="sub">テニスクラブの「今日の割り振り」を自動化。<b>URL一つで iPhone・Android・PC 全対応</b>。名簿から出席者を選ぶだけで、公平でランダム、毎回新鮮なコート割り振りを生成。結果を記録すればランキングも。</p>
+    <div class="pills">
+      <span class="pill">v1: Web/PWA（GitHub Pages）</span>
+      <span class="pill">v1.5: Android / iOS（Capacitor）</span>
+      <span class="pill">クラブ共有（Supabase）</span>
+      <span class="pill">RSVP（出欠事前回答）</span>
+      <span class="pill">跨ぎ最適化＋Eloランキング</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">WHAT IS THIS</div>
+    <h2>このアプリは何？</h2>
+    <p class="lead">テニスの集まりで「誰がどのコートに入るか」を毎回考えるのは大変。GG は<b>会員名簿</b>を一度作っておけば、当日は<b>来ている人をタップで選ぶ</b>だけ。ボタン一つで割り振りを作り、週をまたいでも顔ぶれが偏らないよう最適化します。</p>
+    <div class="grid">
+      <div class="card"><div class="ic">📒</div><h3>名簿は一度きり</h3><p>事前にまとめて登録。当日は出席者をタップで選ぶだけ。</p></div>
+      <div class="card"><div class="ic">⚖️</div><h3>その日みんな均等</h3><p>試合数・休憩がなるべく等しくなるよう選定。</p></div>
+      <div class="card"><div class="ic">🔀</div><h3>週またぎで新鮮</h3><p>最近組んだ人を避ける。古い記録は時間で薄れる。</p></div>
+      <div class="card"><div class="ic">🎾</div><h3>全員プレー最大化</h3><p>基本ダブルス、端数はシングルスで休憩を最小に。</p></div>
+      <div class="card"><div class="ic">🏆</div><h3>ランキング</h3><p>個人Elo＆ペア勝率＆参加回数。毎年リセットで全員にチャンス。</p></div>
+      <div class="card"><div class="ic">📨</div><h3>RSVP（出欠事前）</h3><p>次回の予定を作って「行く／未定」を集計。当日は一発で出席化。</p></div>
+      <div class="card"><div class="ic">🕘</div><h3>履歴＆自動復元</h3><p>過去の開催を日付・会場・名前付きで保存。閉じても再開。</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">A CLUB NIGHT</div>
+    <h2>当日の流れ</h2>
+    <div class="phase">
+      <span class="ttl">事前（一度きり）</span>
+      <div class="tl">
+        <div class="node"><div class="n">0</div><b>名簿を登録</b><p>会員の名前をまとめて追加。帰任した人はアーカイブ（履歴は残る）。</p></div>
+      </div>
+    </div>
+    <div class="phase">
+      <span class="ttl day">当日</span>
+      <div class="tl">
+        <div class="node"><div class="n">1</div><b>出席を選ぶ</b><p>来ている会員をタップ。飛び入りはゲスト追加。日付・会場も記録。</p></div>
+        <div class="node"><div class="n">2</div><b>番号を抽選</b><p>出席者に当日番号1〜Nをランダム抽選（じゃんけん風）。シャッフル可。</p></div>
+        <div class="node"><div class="n">3</div><b>番号を共有</b><p>「名前→今日の番号」一覧で全員が自分の番号を確認。</p></div>
+        <div class="node"><div class="n">4</div><b>ラウンド</b><p>割り振りを表示。終わったら「次のラウンド」。</p></div>
+        <div class="node"><div class="n">5</div><b>結果（任意）</b><p>勝った側をタップ。Elo・ペアランキングに反映。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">HOW IT WORKS</div>
+    <h2>シャッフルの仕組み（3ステップ）</h2>
+    <div class="steps">
+      <div class="step"><div class="no">1</div><h3>コート構成を決める</h3><p>人数とコート数から「ダブルス何面・シングルス何面・休憩何人」を計算。ダブルス優先で全員プレーを最大化。</p></div>
+      <div class="step"><div class="no">2</div><h3>休憩する人を選ぶ（公平）</h3><p>休憩が要るときは、その日プレー回数が多い人から。連続休憩は回避。出番がそろう。</p></div>
+      <div class="step"><div class="no">3</div><h3>組を作る（新鮮・週またぎ）</h3><p>最近の同組・同対戦ほど避けるよう点数化。同日repeatは最強回避、古い記録は時間で減衰。</p></div>
+    </div>
+    <h3 style="margin-top:30px">例：人数とコートでこう決まる</h3>
+    <table>
+      <tr><th>人数</th><th>コート</th><th>割り振り</th><th>休憩</th></tr>
+      <tr><td>6人</td><td>2面</td><td><span class="tag-d">ダブルス</span>1 ＋ <span class="tag-s">シングルス</span>1</td><td>0人</td></tr>
+      <tr><td>11人</td><td>3面</td><td><span class="tag-d">ダブルス</span>2 ＋ <span class="tag-s">シングルス</span>1</td><td>1人</td></tr>
+      <tr><td>12人</td><td>3面</td><td><span class="tag-d">ダブルス</span>3</td><td>0人</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">MAIN SCREEN</div>
+    <h2>メイン画面：コートビュー</h2>
+    <div class="showcase">
+      <div class="ph">
+        <div class="h">
+          <div class="b"><span class="mini">GG</span><span class="rd">R03</span></div>
+          <span class="meta">11人 · 3コート</span>
+        </div>
+        <div class="body">
+          <div class="cv"><div class="tagrow"><span class="cnum">COURT 1</span><span class="tag-d">ダブルス</span></div>
+            <div class="court"><div class="frame"></div><div class="net"></div>
+              <div class="side win"><span class="n a">3</span><span class="n a">7</span></div>
+              <div class="side"><span class="n b">1</span><span class="n b">5</span></div></div></div>
+          <div class="cv"><div class="tagrow"><span class="cnum">COURT 2</span><span class="tag-d">ダブルス</span></div>
+            <div class="court"><div class="frame"></div><div class="net"></div>
+              <div class="side"><span class="n a">2</span><span class="n a">9</span></div>
+              <div class="side win"><span class="n b">6</span><span class="n b">10</span></div></div></div>
+          <div class="cv"><div class="tagrow"><span class="cnum">COURT 3</span><span class="tag-s">シングルス</span></div>
+            <div class="court"><div class="frame"></div><div class="net"></div>
+              <div class="side"><span class="n a">4</span></div>
+              <div class="side"><span class="n b">8</span></div></div></div>
+          <div class="rest"><span class="l">休憩</span><span class="n">11</span></div>
+          <div class="cta">次のラウンド <span class="a">→</span></div>
+        </div>
+      </div>
+      <div class="text">
+        <p>実際のコート図に当日番号を置くので「<b>自分はコート2の左側</b>」が直感でわかります。</p>
+        <ul>
+          <li><b>左＝チームA（黒）／右＝チームB（白）</b>。色がなくても塗りで区別。</li>
+          <li>コートの種類は<b>文字タグ</b>（ダブルス／シングルス）。</li>
+          <li><b>勝った側はライム＋✓</b>でハイライト（結果記録は任意）。</li>
+          <li>通常の1〜3面はスクロールなしで1画面（最大6面対応）。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">RANKINGS</div>
+    <h2>ランキング（結果を記録すると）</h2>
+    <p class="lead">勝った側をタップするだけ。個人は<b>Eloレーティング</b>（相手の強さも反映）、ペアは<b>勝率</b>、さらに<b>参加回数</b>。<b>毎年リセットのシーズン制</b>で、当日・今シーズン・過去シーズンを切替。</p>
+    <div class="rankwrap">
+      <div class="rankcard">
+        <h3>👤 個人ランキング</h3>
+        <div class="tabs"><span class="tab on">今シーズン</span><span class="tab">当日</span><span class="tab">過去シーズン</span></div>
+        <div class="rrow"><span class="rk top">1</span><span class="nm">佐藤</span><span class="delta up">▲</span><span class="val">1624</span><span class="wl">12–4</span></div>
+        <div class="rrow"><span class="rk top">2</span><span class="nm">山本</span><span class="delta up">▲</span><span class="val">1591</span><span class="wl">10–5</span></div>
+        <div class="rrow"><span class="rk top">3</span><span class="nm">田中</span><span class="delta down">▼</span><span class="val">1573</span><span class="wl">9–6</span></div>
+        <div class="rrow"><span class="rk">4</span><span class="nm">鈴木</span><span class="delta">–</span><span class="val">1508</span><span class="wl">7–7</span></div>
+        <div class="rrow"><span class="rk">5</span><span class="nm">高橋</span><span class="delta down">▼</span><span class="val">1466</span><span class="wl">4–9</span></div>
+      </div>
+      <div class="rankcard">
+        <h3>👥 ペアランキング</h3>
+        <div class="tabs"><span class="tab on">勝率</span><span class="tab">最低3戦</span></div>
+        <div class="rrow"><span class="rk top">1</span><span class="nm">佐藤 ＆ 山本</span><span class="val">83%</span><span class="wl">5–1</span></div>
+        <div class="rrow"><span class="rk top">2</span><span class="nm">田中 ＆ 鈴木</span><span class="val">75%</span><span class="wl">3–1</span></div>
+        <div class="rrow"><span class="rk top">3</span><span class="nm">佐藤 ＆ 高橋</span><span class="val">67%</span><span class="wl">4–2</span></div>
+        <div class="rrow"><span class="rk">4</span><span class="nm">山本 ＆ 田中</span><span class="val">50%</span><span class="wl">2–2</span></div>
+      </div>
+      <div class="rankcard">
+        <h3>📅 参加回数ランキング</h3>
+        <div class="tabs"><span class="tab on">今シーズン</span><span class="tab">過去シーズン</span></div>
+        <div class="rrow"><span class="rk top">1</span><span class="nm">田中</span><span class="val">41回</span><span class="wl">82%</span></div>
+        <div class="rrow"><span class="rk top">2</span><span class="nm">鈴木</span><span class="val">38回</span><span class="wl">76%</span></div>
+        <div class="rrow"><span class="rk top">3</span><span class="nm">佐藤</span><span class="val">35回</span><span class="wl">70%</span></div>
+        <div class="rrow"><span class="rk">4</span><span class="nm">山本</span><span class="val">30回</span><span class="wl">60%</span></div>
+        <div class="rrow"><span class="rk">5</span><span class="nm">高橋</span><span class="val">24回</span><span class="wl">48%</span></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:14px;font-size:13px">※ ランキングは試合ログを再計算して算出（結果を後から直しても正確）。<b>毎年1月にリセット</b>（開始月は設定可）され、過去シーズンは「殿堂」として閲覧可。ゲストは対象外。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">RSVP</div>
+    <h2>出欠事前回答（誰が来るか分かる）</h2>
+    <p class="lead">次回の開催を事前作成して「行く／行かない／未定」を集計。当日「セッション開始」で <b>「行く」と答えた人を一括で出席化</b>。コート数も予測で決められる。</p>
+
+    <div class="phase">
+      <span class="ttl">仕組み（2系統・ハイブリッド）</span>
+      <div class="tl">
+        <div class="node"><div class="n">A</div><b>幹事が代理入力</b><p>LINE/WhatsApp で集めた回答を、アプリで一括チェック。最小手数。</p></div>
+        <div class="node"><div class="n">B</div><b>公開RSVPリンク</b><p>セッションごとに <code>/rsvp/abc123</code> のURLを発行。チャットに貼ると各自タップで回答。</p></div>
+        <div class="node"><div class="n">C</div><b>当日に昇格</b><p>「セッション開始」で <code>planned</code> → <code>ongoing</code>。「行く」のRSVPが初期出席者として入る。</p></div>
+        <div class="node"><div class="n">D</div><b>なりすまし軽減</b><p>公開リンクは LocalStorageトークンで「自分の回答のみ修正可」。完全防止は v1.5 のメンバー認証で。</p></div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:30px">「誰が来るか」が一目でわかる（3画面）</h3>
+    <div class="cols">
+      <div class="box in">
+        <h3>📅 ホームの次回カード（admin）</h3>
+        <ul>
+          <li><b>2026-06-01（土）9:00</b> @ Golders Hill</li>
+          <li>✅ <b>行く 9人</b>: 佐藤・山本・田中・鈴木・高橋 <span style="color:var(--muted)">+4</span></li>
+          <li>❓ 未定 2人　／　❌ 行かない 3人</li>
+          <li>推奨コート数: <b>3面</b>（ダブルス2＋シングルス1）</li>
+          <li>[公開リンクをコピー]　[セッションを開始 →]</li>
+        </ul>
+      </div>
+      <div class="box in">
+        <h3>📋 将来セッション詳細（admin）</h3>
+        <ul>
+          <li>✅ <b>行く（9）</b>: 佐藤, 山本, 田中, 鈴木, 高橋, 伊藤, 渡辺, 中村, 小林</li>
+          <li>❓ <b>未定（2）</b>: 加藤, 吉田</li>
+          <li>❌ <b>行かない（3）</b>: 山田, 佐々木, 松本</li>
+          <li>⬜ <b>未回答（6）</b>: 井上, 木村, 林, 清水, 斉藤, 阿部</li>
+          <li>各名前タップで回答編集 / メモ表示</li>
+        </ul>
+      </div>
+    </div>
+    <div class="cols" style="margin-top:14px">
+      <div class="box out">
+        <h3>📨 公開RSVPページ（クラブ全員が見る）</h3>
+        <ul>
+          <li>URL: <code>gg-tennis.app/rsvp/abc123</code></li>
+          <li>タイトル: <b>2026-06-01（土）9:00 @ Golders Hill</b></li>
+          <li>✅ <b>行く 9人</b>: 佐藤・山本・田中・鈴木・高橋・伊藤・渡辺・中村・小林</li>
+          <li>❓ 未定 2人　／　❌ 行かない 3人　<small>（人数のみ）</small></li>
+          <li>[名簿から自分を選ぶ ▾] → [行く] [行かない] [未定] ＋メモ</li>
+          <li><small style="color:var(--muted)">※「行く人リスト」表示は admin がOFFも可</small></li>
+        </ul>
+      </div>
+      <div class="box out">
+        <h3>💡 効果：社会的後押し</h3>
+        <ul>
+          <li>「田中さんが行くなら自分も行こう」</li>
+          <li>「9人いるなら盛り上がりそう」</li>
+          <li>幹事が「あと2人くれば3面いけるよ」と促せる</li>
+          <li>未回答者の名前も並ぶので**催促せず自然に集まる**</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">IDENTITY</div>
+    <h2>名前と番号のしくみ（番号インフレを防ぐ）</h2>
+    <p class="lead">駐在員の入れ替わりが多くても番号は増え続けません。コツは「人＝名前（永続）」と「番号＝当日だけの小さいラベル」を分けること。</p>
+    <div class="idbox">
+      <div class="idflow">
+        <div class="b">会員＝名前<small>永続。履歴は名前で残る</small></div>
+        <span class="ar">→</span>
+        <div class="b">当日番号 1〜N<small>毎回ランダム抽選・使い回し</small></div>
+        <span class="ar">→</span>
+        <div class="b">帰任＝アーカイブ<small>削除せず番号は解放</small></div>
+      </div>
+      <p style="margin:16px 0 0;font-size:14px;color:var(--muted)">番号は毎セッション 1〜N に振り直すので常にコンパクト。履歴・ランキングは名前ベースなので、番号を使い回しても混乱しません。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">DESIGN PROMISE</div>
+    <h2>炎天下＆サングラスで読める</h2>
+    <div class="principles">
+      <div class="pr"><h3>☀️ 明るい背景＋極太文字</h3><p>白基調は日光に強い。暗い画面は反射するので不採用。</p></div>
+      <div class="pr"><h3>🕶 色に頼らない判別</h3><p>チームは黒塗り／白抜き、コートは文字タグ。レンズで色がくすんでも分かる。</p></div>
+      <div class="pr"><h3>🔆 輝度MAX</h3><p>v1（Web）は端末で手動MAX運用。<b>v1.5（ネイティブApp）は起動で自動MAX</b>。</p></div>
+      <div class="pr"><h3>🔢 特大ナンバー</h3><p>離れても走りながらでも読める大きさ。</p></div>
+    </div>
+    <h3 style="margin-top:30px">カラーパレット</h3>
+    <div class="palette">
+      <div class="sw"><div class="chip" style="background:#eef1ea"></div><div class="cap"><b>背景</b><span>#EEF1EA</span></div></div>
+      <div class="sw"><div class="chip" style="background:#0b1410"></div><div class="cap"><b>文字／A</b><span>#0B1410</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1f8a4c"></div><div class="cap"><b>コート緑</b><span>#1F8A4C</span></div></div>
+      <div class="sw"><div class="chip" style="background:#c7f53a"></div><div class="cap"><b>アクセント</b><span>#C7F53A</span></div></div>
+      <div class="sw"><div class="chip" style="background:#ff8a3d"></div><div class="cap"><b>シングルス</b><span>#FF8A3D</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">SCREENS</div>
+    <h2>画面と流れ</h2>
+    <div class="flow">
+      <span class="fbox">ホーム<br><small style="font-weight:600;color:var(--muted)">次回カード</small></span><span class="farrow">→</span>
+      <span class="fbox">将来セッション<br><small style="font-weight:600;color:var(--muted)">RSVP集計・公開リンク</small></span><span class="farrow">→</span>
+      <span class="fbox">セッション開始<br><small style="font-weight:600;color:var(--muted)">「行く」を一括出席化</small></span><span class="farrow">→</span>
+      <span class="fbox">名前→番号</span><span class="farrow">→</span>
+      <span class="fbox">ラウンド</span><span class="farrow">⇄</span>
+      <span class="fbox">履歴</span>
+    </div>
+    <div class="flow" style="margin-top:10px">
+      <span class="fbox">名簿</span>
+      <span class="fbox">ランキング</span>
+      <span class="fbox">過去セッション<br><small style="font-weight:600;color:var(--muted)">日付・会場で一覧</small></span>
+      <span class="fbox">設定<br><small style="font-weight:600;color:var(--muted)">屋外モード等</small></span>
+    </div>
+    <div class="flow" style="margin-top:10px">
+      <span class="fbox" style="background:#eef7f0;border-color:#c9e7d3">公開ルート（認証不要）<br><small style="font-weight:600;color:var(--muted)">/rsvp/:token — 名前選んで回答</small></span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">ROADMAP</div>
+    <h2>リリース計画（3ステップ）</h2>
+    <p class="lead">最初は <b>Web</b> で素早く全員に届け、次に <b>ストア配信のネイティブApp</b> で「アプリ感」を、最後に <b>機能拡張</b>。コードは1本、データは1つの Supabase で全段階を共有。</p>
+
+    <div class="phase">
+      <span class="ttl">v1 — Web / PWA</span>
+      <div class="tl">
+        <div class="node"><div class="n">A</div><b>URL一つで全員アクセス</b><p>iPhone/Android/PC・インストール不要。PWA でホーム画面追加可。</p></div>
+        <div class="node"><div class="n">B</div><b>クラブ共有データ</b><p>Supabase で名簿・履歴・ランキングを一元管理。閲覧=全員／編集=幹事。</p></div>
+        <div class="node"><div class="n">C</div><b>機能フルセット</b><p>名簿・RSVP・出席・抽選・割り振り・結果記録・3種ランキング（シーズン制）・履歴。</p></div>
+        <div class="node"><div class="n">D</div><b>RSVP（出欠事前）</b><p>次回を作成→admin入力 or 公開リンクで回答収集→当日「行く」を一括出席化。</p></div>
+        <div class="node"><div class="n">E</div><b>オフライン耐性</b><p>屋外で電波弱くてもキャッシュで動く。復帰時に自動同期。</p></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <span class="ttl day">v1.5 — ネイティブApp（Android / iOS）</span>
+      <div class="tl">
+        <div class="node"><div class="n">A</div><b>Capacitorでラップ</b><p>同じコードを APK / IPA 化。再実装ゼロ。</p></div>
+        <div class="node"><div class="n">B</div><b>Google Play / App Store 配信</b><p>クラブ非会員も検索で見つけられる。アプリ感あり。</p></div>
+        <div class="node"><div class="n">C</div><b>輝度MAX自動</b><p>Webでできなかった屋外モードがフル動作。</p></div>
+        <div class="node"><div class="n">D</div><b>Web版も並行維持</b><p>URL派 と App派が両立。データは同じ Supabase。</p></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <span class="ttl">v2 — 機能拡張</span>
+      <div class="tl">
+        <div class="node"><div class="n">A</div><b>詳細スコア・得失点</b><p>ゲーム数入力で深いランキング。</p></div>
+        <div class="node"><div class="n">B</div><b>実力均衡マッチング</b><p>Eloを割り振りに反映、強弱を散らす。</p></div>
+        <div class="node"><div class="n">C</div><b>殿堂・RSVPリマインドPush通知</b><p>歴代シーズン王者、未回答者へのPush通知（Capacitor）。</p></div>
+        <div class="node"><div class="n">D</div><b>メンバー個人認証</b><p>各自マジックリンクでログイン。RSVPなりすまし完全防止＋個人の出席率閲覧。</p></div>
+        <div class="node"><div class="n">E</div><b>マルチクラブ</b><p>1インスタンスで複数クラブ。クラブ単位の権限分離。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="border-bottom:none">
+  <div class="wrap">
+    <div class="kicker">TECH NOTES</div>
+    <h2>技術メモ（参考）</h2>
+    <div class="grid">
+      <div class="card"><div class="ic">🌐</div><h3>HTML/TS + Vite</h3><p>素のWeb。GitHub Pages で無料配信。デプロイは push のみ。</p></div>
+      <div class="card"><div class="ic">🧠</div><h3>純TSエンジン</h3><p>割り振り・Eloをロジック分離。フレームワーク非依存・決定的にテスト。</p></div>
+      <div class="card"><div class="ic">☁️</div><h3>Supabase</h3><p>Postgres + Auth + Realtime。クラブ全体で共有。閲覧=全員／編集=幹事（RLS）。</p></div>
+      <div class="card"><div class="ic">💾</div><h3>IndexedDB + Outbox</h3><p>オフライン時はキャッシュで操作、復帰時に同期。</p></div>
+      <div class="card"><div class="ic">📱</div><h3>v1.5: Capacitor</h3><p>同じコードを APK / IPA 化。App Store / Google Play 配信。</p></div>
+      <div class="card"><div class="ic">✅</div><h3>TDD・80%+</h3><p>Vitest で均等性・多様性・Elo・保存・RLSを自動検証。</p></div>
+    </div>
+    <p class="lead" style="margin-top:14px;font-size:13px">※ <b>運用コストは月額0円</b>（GitHub Pages・Supabase ともに無料枠で完結）。クラブ規模なら 10年使っても無料枠の数%以下。v1.5 でストア配信時のみ初期費用（Apple $99/年、Google $25 一度きり）。</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    GG — Tennis Court Shuffle / 設計概要 · 2026-05-25<br>
+    元の詳細設計書: <code>docs/superpowers/specs/2026-05-25-gg-tennis-shuffle-design.md</code>
+  </div>
+</footer>
+
+</body>
+</html>
