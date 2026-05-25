@@ -32,6 +32,10 @@ export interface SessionRepository {
   loadPast(): Promise<SessionRow[]>;
   loadById(id: string): Promise<SessionRow | null>;
   upsert(row: SessionRow): Promise<void>;
+  /** Pure UPDATE for a known-existing session. Avoids the INSERT path in
+   * upsert, which is rejected by the v1.1 RLS policy when status='past'
+   * (anon INSERT is restricted to status='ongoing'). */
+  update(row: SessionRow): Promise<void>;
 }
 
 export function createSessionRepository(supabase: SupabaseClient): SessionRepository {
@@ -54,6 +58,11 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
     },
     async upsert(row) {
       const { error } = await t().upsert(row);
+      if (error) throw error;
+    },
+    async update(row) {
+      const { id, ...rest } = row;
+      const { error } = await t().update(rest).eq("id", id);
       if (error) throw error;
     },
   };

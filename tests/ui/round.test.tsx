@@ -157,10 +157,22 @@ describe("RoundPage", () => {
     await waitFor(() => expect(sessionStore.nextRound).toHaveBeenCalled());
   });
 
-  it("clicking history navigates to /session/history", () => {
-    sessionStore.session.value = makeSession(makeRound());
-    const { getByText } = render(<RoundPage />);
-    fireEvent.click(getByText("履歴"));
+  it("clicking 前のラウンド navigates to /session/history", () => {
+    const base = makeSession(makeRound());
+    sessionStore.session.value = {
+      ...base,
+      rounds: [base.rounds[0]!, base.rounds[0]!],
+      currentRoundIndex: 1,
+    };
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("prev-round-btn"));
     expect(currentPath.value).toBe("/session/history");
+  });
+
+  it("前のラウンド is disabled on round 0", () => {
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    const btn = getByTestId("prev-round-btn") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
   });
 });

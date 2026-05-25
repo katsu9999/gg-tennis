@@ -114,9 +114,11 @@ export function RoundPage() {
           type="button"
           class="btn-primary"
           style={{ flex: 1 }}
+          data-testid="prev-round-btn"
+          disabled={s.currentRoundIndex === 0}
           onClick={() => navigate("/session/history")}
         >
-          履歴
+          <span class="a">←</span> 前のラウンド
         </button>
         <button
           type="button"
@@ -134,8 +136,17 @@ export function RoundPage() {
         data-testid="end-session-btn"
         onClick={async () => {
           if (!confirm("今日のセッションを終了します。ペア履歴が保存されます。よろしいですか？")) return;
-          await sessionStore.endSession();
-          navigate("/");
+          try {
+            await sessionStore.endSession();
+            navigate("/");
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            // Surface the error so the operator (and the developer) can see why
+            // end-session failed — otherwise the click silently no-ops and the
+            // session sticks in `ongoing` forever.
+            alert(`セッション終了に失敗しました:\n${msg}`);
+            console.error("endSession failed", e);
+          }
         }}
         style={{
           display: "block",
