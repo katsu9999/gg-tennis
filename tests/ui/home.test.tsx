@@ -131,7 +131,7 @@ describe("HomePage", () => {
   it("renders all 6 nav buttons", () => {
     const { getByText } = render(<HomePage />);
     expect(getByText("セッション開始 →")).toBeDefined();
-    expect(getByText("将来セッション")).toBeDefined();
+    expect(getByText(/将来セッション\s*\(準備中\)/)).toBeDefined();
     expect(getByText("名簿")).toBeDefined();
     expect(getByText("ランキング")).toBeDefined();
     expect(getByText("過去セッション")).toBeDefined();

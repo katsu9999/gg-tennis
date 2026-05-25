@@ -11,15 +11,22 @@ import { RsvpSummary } from "@/ui/components/rsvp-summary";
 interface NavButtonProps {
   label: string;
   to: string;
+  disabled?: boolean;
 }
 
-function NavButton({ label, to }: NavButtonProps) {
+function NavButton({ label, to, disabled }: NavButtonProps) {
   return (
     <button
       type="button"
       class="btn-primary"
-      onClick={() => navigate(to)}
-      style={{ width: "100%" }}
+      disabled={disabled}
+      onClick={() => { if (!disabled) navigate(to); }}
+      style={{
+        width: "100%",
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+      title={disabled ? "準備中" : undefined}
     >
       {label}
     </button>
@@ -150,7 +157,7 @@ export function HomePage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <NavButton label="セッション開始 →" to="/session/new" />
-        <NavButton label="将来セッション" to="/planned" />
+        <NavButton label="将来セッション (準備中)" to="/planned" disabled />
         <NavButton label="名簿" to="/roster" />
         <NavButton label="ランキング" to="/ranking" />
         <NavButton label="過去セッション" to="/sessions/past" />
