@@ -56,6 +56,7 @@ function makeRepos(
       loadPast: vi.fn().mockResolvedValue(sessions),
       loadById: vi.fn().mockResolvedValue(null),
       upsert: vi.fn(),
+      update: vi.fn(),
     },
   };
 }

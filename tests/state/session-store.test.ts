@@ -20,6 +20,9 @@ function makeDeps() {
       upsert: vi.fn().mockImplementation(async (r: SessionRow) => {
         upsertedRows.push(r);
       }),
+      update: vi.fn().mockImplementation(async (r: SessionRow) => {
+        upsertedRows.push(r);
+      }),
     } satisfies SessionRepository,
     historyRepo: {
       loadPairHistory: vi.fn().mockResolvedValue(emptyHist()),

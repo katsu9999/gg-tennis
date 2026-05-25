@@ -311,9 +311,11 @@ export function createSessionStore(deps: {
       await historyRepo.upsertPairWeights(updates);
     }
 
-    // Mark session as past
+    // Mark session as past. Use UPDATE (not upsert) — upsert evaluates the
+    // INSERT WITH CHECK clause, which the v1.1 RLS policy restricts to
+    // status='ongoing'. UPDATE-only avoids that path entirely.
     s.status = "past";
-    await sessionRepo.upsert(toSessionRow(s));
+    await sessionRepo.update(toSessionRow(s));
 
     // Clear signal
     session.value = null;
