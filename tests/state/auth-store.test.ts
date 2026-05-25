@@ -35,6 +35,13 @@ describe("auth store", () => {
     expect(store.isAdmin.value).toBe(false);
   });
 
+  it("loading is true initially and false after init()", async () => {
+    const store = createAuthStore(fakeSupabase({}));
+    expect(store.loading.value).toBe(true);
+    await store.init();
+    expect(store.loading.value).toBe(false);
+  });
+
   it("init() populates email and isAdmin when session has an admin email", async () => {
     const store = createAuthStore(fakeSupabase({ adminEmail: "admin@example.com" }));
     await store.init();
