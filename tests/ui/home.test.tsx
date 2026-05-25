@@ -8,12 +8,15 @@ const hoisted = vi.hoisted(() => {
   return {
     nextSignal: null as unknown as import("@preact/signals").Signal<PlannedSessionRow | null>,
     bySessionSignal: null as unknown as import("@preact/signals").Signal<Map<string, RsvpRow[]>>,
+    liveSignal: null as unknown as import("@preact/signals").Signal<unknown>,
     allMembersSignal: null as unknown as import("@preact/signals").Signal<Member[]>,
     activeMembersSignal: null as unknown as import("@preact/signals").Signal<Member[]>,
-    isAdminSignal: null as unknown as import("@preact/signals").Signal<boolean>,
     loadNextMock: vi.fn().mockResolvedValue(undefined),
     loadForSessionMock: vi.fn().mockResolvedValue([]),
     rosterLoadMock: vi.fn().mockResolvedValue(undefined),
+    liveRefreshMock: vi.fn().mockResolvedValue(undefined),
+    liveSubscribeMock: vi.fn(),
+    liveUnsubscribeMock: vi.fn(),
   };
 });
 
@@ -29,14 +32,14 @@ vi.mock("@/ui/stores", async () => {
   const bySessionSig = signal<Map<string, RsvpRow[]>>(new Map());
   const allSig = signal<Member[]>(members);
   const activeSig = computed(() => allSig.value.filter(m => m.status === "active"));
-  const isAdminSig = signal<boolean>(true);
+  const liveSig = signal<unknown>(null);
 
   // Store references into hoisted so tests can mutate them
   hoisted.nextSignal = nextSig;
   hoisted.bySessionSignal = bySessionSig;
   hoisted.allMembersSignal = allSig;
   hoisted.activeMembersSignal = activeSig as unknown as import("@preact/signals").Signal<Member[]>;
-  hoisted.isAdminSignal = isAdminSig;
+  hoisted.liveSignal = liveSig;
 
   return {
     plannedSessionStore: {
@@ -68,13 +71,24 @@ vi.mock("@/ui/stores", async () => {
       unarchive: vi.fn(),
       hardDelete: vi.fn(),
     },
-    authStore: {
-      email: signal("admin@example.com"),
-      isAdmin: isAdminSig,
-      loading: signal(false),
-      init: vi.fn(),
-      signInWithMagicLink: vi.fn(),
-      signOut: vi.fn(),
+    hostStore: {
+      token: signal("host-token"),
+      label: signal(""),
+      setLabel: vi.fn(),
+      isHost: vi.fn().mockReturnValue(false),
+    },
+    pinStore: {
+      isUnlocked: signal(false),
+      verifying: signal(false),
+      verify: vi.fn().mockResolvedValue(false),
+      getPin: vi.fn().mockReturnValue(null),
+      lock: vi.fn(),
+    },
+    liveSessionStore: {
+      current: liveSig,
+      refresh: hoisted.liveRefreshMock,
+      subscribe: hoisted.liveSubscribeMock,
+      unsubscribe: hoisted.liveUnsubscribeMock,
     },
     venueRepo: {
       list: vi.fn().mockResolvedValue([]),
@@ -97,10 +111,13 @@ beforeEach(() => {
   hoisted.loadNextMock.mockClear();
   hoisted.loadForSessionMock.mockClear();
   hoisted.rosterLoadMock.mockClear();
+  hoisted.liveRefreshMock.mockClear();
+  hoisted.liveSubscribeMock.mockClear();
+  hoisted.liveUnsubscribeMock.mockClear();
   // Reset signals to defaults
   hoisted.nextSignal.value = null;
   hoisted.bySessionSignal.value = new Map();
-  hoisted.isAdminSignal.value = true;
+  hoisted.liveSignal.value = null;
 });
 
 describe("HomePage", () => {

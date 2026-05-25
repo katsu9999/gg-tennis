@@ -85,6 +85,8 @@ function makeSession(round: Round, resters: { kind: "member"; memberId: number }
     todayStats: new Map(),
     prevResters: [],
     rngSeed: 1,
+      hostToken: null,
+      hostLabel: null,
   };
 }
 

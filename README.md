@@ -5,8 +5,27 @@ Shared club-wide via Supabase, deployed on GitHub Pages. URL-only access for
 iPhone / Android / PC. Ready for v1.5 Capacitor wrapping (Android / iOS native).
 
 - **Spec:** [`docs/superpowers/specs/2026-05-25-gg-tennis-shuffle-design.md`](docs/superpowers/specs/2026-05-25-gg-tennis-shuffle-design.md)
-- **Implementation plan:** [`docs/superpowers/plans/2026-05-25-gg-tennis-shuffle-v1.md`](docs/superpowers/plans/2026-05-25-gg-tennis-shuffle-v1.md)
+- **v1 plan:** [`docs/superpowers/plans/2026-05-25-gg-tennis-shuffle-v1.md`](docs/superpowers/plans/2026-05-25-gg-tennis-shuffle-v1.md)
+- **v1.1 plan (Model A):** [`docs/superpowers/plans/2026-05-25-gg-tennis-v1.1-model-a.md`](docs/superpowers/plans/2026-05-25-gg-tennis-v1.1-model-a.md)
 - **Visual overview (printable):** [`docs/GG-design-overview.html`](docs/GG-design-overview.html)
+
+## How it works (v1.1 — Model A)
+
+- **No login.** Anyone with the URL can view everything and start a session.
+- **First to start = today's host.** The "セッション開始" button writes your
+  browser as host. The label shows on the live-session card on the home page
+  ("○○ さんが運営中").
+- **Open operation.** Once a session is ongoing, ANY visitor can tap winners,
+  advance rounds, or end the session. Supabase Realtime broadcasts every change
+  so all phones stay in sync.
+- **Club PIN for destructive actions.** Member delete, venue edit,
+  planned-session creation, settings change → all require the shared club PIN.
+  Rotate it from /settings.
+- **Spectate.** When a session is live, every member sees a "🟢 ライブ中" card
+  on home and can tap to follow along (or take over if needed).
+
+See [`docs/superpowers/plans/2026-05-25-gg-tennis-v1.1-model-a.md`](docs/superpowers/plans/2026-05-25-gg-tennis-v1.1-model-a.md)
+for the full design rationale (why we dropped the persistent admin allowlist).
 
 ## Setup
 
@@ -93,12 +112,17 @@ because it needs a real auth flow and real RLS.
    --   supabase/migrations/0001_schema.sql
    --   supabase/migrations/0002_rsvp.sql
    --   supabase/migrations/0003_rls.sql
+   --   supabase/migrations/0004_v1_1_schema.sql   -- v1.1: host_token, club_pin_hash, operation_log
+   --   supabase/migrations/0005_v1_1_rpc.sql      -- v1.1: PIN-gated SECURITY DEFINER RPCs
+   --   supabase/migrations/0006_v1_1_rls.sql      -- v1.1: open session writes + lock PIN tables
    ```
 
-4. Seed an admin + a few members. In the Supabase SQL editor:
+4. Seed members and set the initial club PIN:
 
    ```sql
-   insert into admins (email) values ('YOUR_EMAIL@example.com');
+   -- One-time: set the club PIN (use a strong value; rotate from /settings later).
+   update settings set club_pin_hash = crypt('CHANGE_ME', gen_salt('bf')) where id = 1;
+
    insert into members (name, status) values
      ('佐藤', 'active'),
      ('山本', 'active'),
@@ -117,48 +141,24 @@ npm run dev          # http://localhost:5173
 
 ### Walk through the flow
 
-1. Open `http://localhost:5173`.
-2. The home page shows 6 nav buttons. The "次回セッション" card is empty (no
-   planned sessions yet — that's Phase 6).
-3. **Sign in (admin):** click "設定" → not yet implemented in v1 (Phase 5).
-   For now, sign in via the browser dev console:
-
-   ```js
-   import("./src/data/supabase-client.ts").then(({ supabase }) =>
-     supabase.auth.signInWithOtp({
-       email: "YOUR_EMAIL@example.com",
-       options: { emailRedirectTo: window.location.origin },
-     })
-   );
-   ```
-
-   Check your inbox, click the magic link, the page reloads and admin-only
-   pages become available.
+1. Open `http://localhost:5173` — no login required.
+2. The home page shows 6 nav buttons + the "📅 次回セッション" card. When a
+   session is live, a "🟢 ライブ中" card appears above it.
+3. Optional: visit **設定** → enter your display name (shown as
+   "○○ さんが運営中" on the live card).
 4. **セッション開始 →** brings up the new-session form. Pick a date, a
    location (autocomplete from `venues`), 3 courts, シングルス許可, and tap
-   6+ members.
-5. **次へ：番号を抽選 →** opens the number-map page showing
-   名前 → 1..N. Confirm everyone sees their number.
-6. **ラウンド開始 →** generates the first round. The court figure is the
-   main screen. Tap one team to record them as the winner (✓ + lime fill).
+   6+ members. The first PIN-gated action (e.g. saving a new venue) will
+   prompt for the club PIN.
+5. **次へ：番号を抽選 →** opens the number-map page showing 名前 → 1..N.
+6. **ラウンド開始 →** generates the first round. Anyone (host or spectator)
+   can tap a team to record them as the winner (✓ + lime fill).
 7. Tap **次のラウンド →** several times. Play counts stay balanced
-   (`max-min ≤ 1`).
-8. Open **履歴** to navigate previous rounds with ←/→ and toggle the name
-   display.
-9. Verify in Supabase: `sessions` has one `ongoing` row, `match_log` has
-   the winners you tapped, `pair_history` is still empty (it flushes on
-   end-session, which is wired in Phase 5).
-
-### What to expect to NOT work yet
-
-- **/login** page UI — Phase 5
-- **Roster management UI** — Phase 5
-- **/planned, /sessions/past, /ranking** — Phase 6/7
-- **/settings, /privacy** — Phase 8 (now implemented)
-- **Hard delete + JSON export** — Phase 5
-- **Public RSVP page** — Phase 6
-
-If anything in steps 4–8 misbehaves, that's a real bug.
+   (`max-min ≤ 1`). Other phones see updates instantly via Realtime.
+8. Open **履歴** to navigate previous rounds with ←/→ and toggle name display.
+9. Verify in Supabase: `sessions` has one `ongoing` row with your `host_token`,
+   `match_log` has the winners you tapped, `pair_history` is empty until
+   end-session, `operation_log` records the writes.
 
 ## PWA & pages (Phase 8)
 

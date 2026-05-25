@@ -1,6 +1,11 @@
 import { useEffect } from "preact/hooks";
 import { navigate } from "@/ui/router";
-import { plannedSessionStore, rsvpStore, rosterStore, authStore } from "@/ui/stores";
+import {
+  plannedSessionStore,
+  rsvpStore,
+  rosterStore,
+  liveSessionStore,
+} from "@/ui/stores";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 
 interface NavButtonProps {
@@ -24,7 +29,11 @@ function NavButton({ label, to }: NavButtonProps) {
 export function HomePage() {
   useEffect(() => {
     void (async () => {
-      await plannedSessionStore.loadNext();
+      await Promise.all([
+        plannedSessionStore.loadNext(),
+        liveSessionStore.refresh(),
+        liveSessionStore.subscribe(),
+      ]);
       const next = plannedSessionStore.next.value;
       if (next) {
         await Promise.all([
@@ -33,10 +42,11 @@ export function HomePage() {
         ]);
       }
     })();
+    return () => liveSessionStore.unsubscribe();
   }, []);
 
   const next = plannedSessionStore.next.value;
-  const isAdmin = authStore.isAdmin.value;
+  const live = liveSessionStore.current.value;
 
   const nextSessionCard = next ? (() => {
     const rsvps = rsvpStore.bySession.value.get(next.id) ?? [];
@@ -48,8 +58,8 @@ export function HomePage() {
           <strong>{next.date}</strong> @ {next.location}
         </p>
         <RsvpSummary rsvps={rsvps} activeMembers={activeMembers} layout="chips" />
-        {isAdmin && (
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          {next.public_rsvp_token && (
             <button
               type="button"
               class="btn-primary"
@@ -61,16 +71,16 @@ export function HomePage() {
             >
               公開リンクをコピー
             </button>
-            <button
-              type="button"
-              class="btn-primary"
-              onClick={() => navigate(`/session/new?from=${next.id}`)}
-              style={{ flex: 1 }}
-            >
-              セッション開始 →
-            </button>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            class="btn-primary"
+            onClick={() => navigate(`/session/new?from=${next.id}`)}
+            style={{ flex: 1 }}
+          >
+            セッション開始 →
+          </button>
+        </div>
       </>
     );
   })() : (
@@ -78,11 +88,9 @@ export function HomePage() {
       <p class="muted" style={{ margin: "8px 0 0" }}>
         まだ将来セッションがありません。
       </p>
-      {isAdmin && (
-        <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-          <a href="/planned">← admin: 作成する</a>
-        </p>
-      )}
+      <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+        <a href="/planned">→ 予定セッションを作成する</a>
+      </p>
     </>
   );
 
@@ -94,6 +102,46 @@ export function HomePage() {
         </strong>
         <span class="muted">Tennis Court Shuffle</span>
       </header>
+
+      {live && (
+        <section
+          class="card"
+          data-testid="live-session-card"
+          style={{
+            marginBottom: 16,
+            borderColor: "var(--lime)",
+            borderWidth: 2,
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 18 }}>
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: "#22c55e",
+                marginRight: 8,
+                verticalAlign: "middle",
+              }}
+            />
+            ライブ中 — {live.location}
+          </h2>
+          {live.host_label && (
+            <p class="muted" style={{ margin: "4px 0 8px", fontSize: 13 }}>
+              {live.host_label} さんが開始
+            </p>
+          )}
+          <button
+            type="button"
+            class="btn-primary"
+            onClick={() => navigate("/session/round")}
+            style={{ width: "100%" }}
+          >
+            観戦・運営する →
+          </button>
+        </section>
+      )}
 
       <section class="card" style={{ marginBottom: 16 }} data-testid="next-session-card">
         <h2 style={{ margin: 0, fontSize: 18 }}>📅 次回セッション</h2>

@@ -33,9 +33,16 @@ export interface TableResponses<TRow = Record<string, unknown>> {
  *   const repo = createMemberRepository(c);
  *   await repo.listAll();  // sees the configured list
  */
-export function fakeClient(responses: Record<string, TableResponses>): SupabaseClient {
+export function fakeClient(
+  responses: Record<string, TableResponses>,
+  rpcResponses?: Record<string, { data?: unknown; error?: { message: string } | null }>,
+): SupabaseClient {
   const fromSpy = vi.fn((table: string) => makeTableBuilder(responses[table] ?? {}));
-  return { from: fromSpy } as unknown as SupabaseClient;
+  const rpcSpy = vi.fn(async (fn: string) => {
+    const r = rpcResponses?.[fn];
+    return { data: r?.data ?? null, error: r?.error ?? null };
+  });
+  return { from: fromSpy, rpc: rpcSpy } as unknown as SupabaseClient;
 }
 
 function makeTableBuilder<TRow>(resp: TableResponses<TRow>) {

@@ -1,8 +1,8 @@
 import { signal } from "@preact/signals";
 
 // Strip the Vite base path so route matching always works against bare paths
-// like "/login" regardless of whether the app is hosted at "/" or at
-// "/gg-tennis-shuffle/". When BASE_URL is "/" (default), stripBase is a no-op.
+// regardless of whether the app is hosted at "/" or at "/gg-tennis-shuffle/".
+// When BASE_URL is "/" (default), stripBase is a no-op.
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, ""); // e.g. "/gg-tennis-shuffle" or ""
 
 export function stripBase(path: string): string {
@@ -12,7 +12,6 @@ export function stripBase(path: string): string {
 
 export type Route =
   | { name: "home" }
-  | { name: "login" }
   | { name: "roster" }
   | { name: "planned-sessions" }
   | { name: "new-session" }
@@ -29,7 +28,6 @@ const PUBLIC_RSVP_PATTERN = /^\/rsvp\/([A-Za-z0-9_-]+)$/;
 
 export function matchRoute(path: string): Route {
   if (path === "/" || path === "") return { name: "home" };
-  if (path === "/login") return { name: "login" };
   if (path === "/roster") return { name: "roster" };
   if (path === "/planned") return { name: "planned-sessions" };
   if (path === "/session/new") return { name: "new-session" };

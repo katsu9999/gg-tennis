@@ -8,11 +8,13 @@ const members: Member[] = [
   { id: 2, name: "B", status: "archived", createdAt: new Date("2026-01-02") },
 ];
 
+const PIN = "test-pin";
+
 function makeRepo(): MemberRepository {
   return {
     listAll: vi.fn().mockResolvedValue(members),
     listActive: vi.fn().mockResolvedValue(members.filter(m => m.status === "active")),
-    add: vi.fn().mockImplementation(async ({ name }: { name: string }) => ({
+    add: vi.fn().mockImplementation(async ({ name }: { name: string; pin: string }) => ({
       id: 99,
       name,
       status: "active",
@@ -52,32 +54,38 @@ describe("roster store", () => {
   });
 
   it("add() appends the new member to all", async () => {
-    const store = createRosterStore(makeRepo());
+    const repo = makeRepo();
+    const store = createRosterStore(repo);
     await store.load();
-    await store.add("New");
+    await store.add("New", PIN);
     expect(store.active.value.map(m => m.name)).toContain("New");
+    expect(repo.add).toHaveBeenCalledWith({ name: "New", pin: PIN });
   });
 
   it("rename() replaces the member in place", async () => {
-    const store = createRosterStore(makeRepo());
+    const repo = makeRepo();
+    const store = createRosterStore(repo);
     await store.load();
-    await store.rename(1, "A-renamed");
+    await store.rename(1, "A-renamed", PIN);
     expect(store.all.value.find(m => m.id === 1)?.name).toBe("A-renamed");
+    expect(repo.rename).toHaveBeenCalledWith(1, "A-renamed", PIN);
   });
 
   it("archive() flips status to archived", async () => {
     const store = createRosterStore(makeRepo());
     await store.load();
-    await store.archive(1);
+    await store.archive(1, PIN);
     expect(store.active.value).toHaveLength(0);
     expect(store.archived.value).toHaveLength(2);
   });
 
   it("hardDelete() removes the member entirely", async () => {
-    const store = createRosterStore(makeRepo());
+    const repo = makeRepo();
+    const store = createRosterStore(repo);
     await store.load();
-    await store.hardDelete(1);
+    await store.hardDelete(1, PIN);
     expect(store.all.value).toHaveLength(1);
     expect(store.all.value.find(m => m.id === 1)).toBeUndefined();
+    expect(repo.hardDelete).toHaveBeenCalledWith(1, PIN);
   });
 });

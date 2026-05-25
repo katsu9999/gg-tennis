@@ -18,17 +18,32 @@ describe("VenueRepository", () => {
     expect(await repo.list()).toEqual([]);
   });
 
-  it("add calls upsert with the correct name", async () => {
-    const c = fakeClient({ venues: {} });
+  it("add calls upsert_venue RPC with PIN and venue name", async () => {
+    const c = fakeClient({ venues: {} }, { upsert_venue: { data: 1 } });
     const repo = createVenueRepository(c);
-    await repo.add("West Ham Park");
-    // Verify the table was accessed
-    expect(c.from).toHaveBeenCalledWith("venues");
+    await repo.add("West Ham Park", "test-pin");
+    expect(c.rpc).toHaveBeenCalledWith("upsert_venue", {
+      p_pin: "test-pin",
+      p_id: null,
+      p_name: "West Ham Park",
+    });
   });
 
-  it("add throws when supabase returns an error", async () => {
-    const c = fakeClient({ venues: { error: { message: "unique violation" } } });
+  it("add swallows unique-violation errors", async () => {
+    const c = fakeClient(
+      { venues: {} },
+      { upsert_venue: { error: { message: "duplicate key value" } } },
+    );
     const repo = createVenueRepository(c);
-    await expect(repo.add("Duplicate")).rejects.toMatchObject({ message: "unique violation" });
+    await expect(repo.add("Duplicate", "test-pin")).resolves.toBeUndefined();
+  });
+
+  it("add throws on non-unique errors", async () => {
+    const c = fakeClient(
+      { venues: {} },
+      { upsert_venue: { error: { message: "invalid_pin" } } },
+    );
+    const repo = createVenueRepository(c);
+    await expect(repo.add("Whatever", "wrong-pin")).rejects.toMatchObject({ message: "invalid_pin" });
   });
 });

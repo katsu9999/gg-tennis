@@ -63,20 +63,19 @@ vi.mock("@/ui/stores", async () => {
       unarchive: vi.fn(),
       hardDelete: vi.fn(),
     },
-    authStore: {
-      email: signal("admin@example.com"),
-      isAdmin: signal(true),
-      loading: signal(false),
-      init: vi.fn(),
-      signInWithMagicLink: vi.fn(),
-      signOut: vi.fn(),
+    pinStore: {
+      isUnlocked: signal(true),
+      verifying: signal(false),
+      verify: vi.fn().mockResolvedValue(true),
+      getPin: vi.fn().mockReturnValue("test-pin"),
+      lock: vi.fn(),
     },
   };
 });
 
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { PlannedSessionsPage, resetPlannedSessionsState } from "@/ui/pages/planned-sessions";
-import { plannedSessionStore, rsvpStore, authStore } from "@/ui/stores";
+import { plannedSessionStore, rsvpStore, pinStore } from "@/ui/stores";
 
 const ps = plannedSessionStore as unknown as {
   list: { value: { id: string; date: string; location: string; public_rsvp_token: string | null }[] };
@@ -88,7 +87,10 @@ const rs = rsvpStore as unknown as {
   adminUpsert: ReturnType<typeof vi.fn>;
   bySession: { value: Map<string, unknown[]> };
 };
-const a = authStore as unknown as { isAdmin: { value: boolean } };
+const p = pinStore as unknown as {
+  isUnlocked: { value: boolean };
+  getPin: ReturnType<typeof vi.fn>;
+};
 
 beforeEach(() => {
   resetPlannedSessionsState();
@@ -98,18 +100,13 @@ beforeEach(() => {
   ps.rotateToken.mockClear();
   rs.adminUpsert.mockClear();
   rs.bySession.value = new Map();
-  a.isAdmin.value = true;
+  p.isUnlocked.value = true;
+  p.getPin.mockReturnValue("test-pin");
   // Stub clipboard
   Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
 });
 
 describe("PlannedSessionsPage", () => {
-  it("shows admin-only notice when not admin", () => {
-    a.isAdmin.value = false;
-    const { getByText } = render(<PlannedSessionsPage />);
-    expect(getByText(/幹事のみ/)).toBeDefined();
-  });
-
   it("renders empty-state when no planned sessions", () => {
     const { getByText } = render(<PlannedSessionsPage />);
     expect(getByText(/まだ将来セッションがありません/)).toBeDefined();
@@ -121,14 +118,16 @@ describe("PlannedSessionsPage", () => {
     expect(btn.disabled).toBe(true);
   });
 
-  it("filling form and clicking create calls plannedSessionStore.create", async () => {
+  it("filling form and clicking create calls plannedSessionStore.create with PIN", async () => {
     const { getByTestId } = render(<PlannedSessionsPage />);
     fireEvent.input(getByTestId("planned-location"), { target: { value: "Golders Hill" } });
     fireEvent.click(getByTestId("planned-create"));
     await waitFor(() => expect(ps.create).toHaveBeenCalled());
-    const call = ps.create.mock.calls[0]![0] as { location: string; court_count: number };
-    expect(call.location).toBe("Golders Hill");
-    expect(call.court_count).toBe(3);
+    const call = ps.create.mock.calls[0]!;
+    const input = call[0] as { location: string; court_count: number };
+    expect(input.location).toBe("Golders Hill");
+    expect(input.court_count).toBe(3);
+    expect(call[1]).toBe("test-pin");
   });
 
   it("after creation, the session appears in the list", async () => {
@@ -151,17 +150,17 @@ describe("PlannedSessionsPage", () => {
     expect(call.status).toBe("going");
   });
 
-  it("copy-link button rotates and copies a fresh token when none exists", async () => {
+  it("copy-link button rotates and copies a fresh token when none exists, passing PIN", async () => {
     ps.list.value = [
       { id: "p1", date: "2026-06-01", location: "Golders", public_rsvp_token: null },
     ];
     const { getByTestId } = render(<PlannedSessionsPage />);
     fireEvent.click(getByTestId("planned-copy-link-p1"));
-    await waitFor(() => expect(ps.rotateToken).toHaveBeenCalledWith("p1"));
+    await waitFor(() => expect(ps.rotateToken).toHaveBeenCalledWith("p1", "test-pin"));
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
 
-  it("delete confirm calls plannedSessionStore.delete", async () => {
+  it("delete confirm calls plannedSessionStore.delete with PIN", async () => {
     ps.list.value = [
       { id: "p1", date: "2026-06-01", location: "Golders", public_rsvp_token: null },
     ];
@@ -169,7 +168,7 @@ describe("PlannedSessionsPage", () => {
     vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
     const { getByTestId } = render(<PlannedSessionsPage />);
     fireEvent.click(getByTestId("planned-delete-p1"));
-    await waitFor(() => expect(ps.delete).toHaveBeenCalledWith("p1"));
+    await waitFor(() => expect(ps.delete).toHaveBeenCalledWith("p1", "test-pin"));
     vi.unstubAllGlobals();
   });
 });

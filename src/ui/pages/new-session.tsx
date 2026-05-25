@@ -1,7 +1,16 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { navigate } from "@/ui/router";
-import { rosterStore, sessionStore, venueRepo, authStore, plannedSessionRepo, plannedSessionStore, rsvpStore } from "@/ui/stores";
+import {
+  rosterStore,
+  sessionStore,
+  venueRepo,
+  hostStore,
+  pinStore,
+  plannedSessionRepo,
+  plannedSessionStore,
+  rsvpStore,
+} from "@/ui/stores";
 import { getFromParam } from "@/ui/location";
 
 // Form state — scoped per page navigation. signals are module-scoped here for
@@ -79,14 +88,21 @@ async function submit(): Promise<void> {
       courtCount: courtCount.value,
       allowSingles: allowSingles.value,
       memberIds: [...selected.value],
+      hostToken: hostStore.token.value,
+      hostLabel: hostStore.label.value || null,
       ...(plannedSessionId.value ? { plannedSessionId: plannedSessionId.value } : {}),
     });
-    // Best-effort: delete the planned session it was derived from
-    if (plannedSessionId.value) {
-      plannedSessionStore.delete(plannedSessionId.value).catch(() => undefined);
+    // Best-effort: delete the planned session it was derived from (PIN-gated;
+    // skipped silently if PIN isn't unlocked — the planned session row will
+    // just be left behind for the operator to clean up later).
+    const pin = pinStore.getPin();
+    if (plannedSessionId.value && pin) {
+      plannedSessionStore.delete(plannedSessionId.value, pin).catch(() => undefined);
     }
-    // Best-effort: capture the venue for next time
-    await venueRepo.add(location.value).catch(() => undefined);
+    // Best-effort: capture the venue for next time (PIN-gated; same behavior).
+    if (pin) {
+      await venueRepo.add(location.value, pin).catch(() => undefined);
+    }
     // Reset selection so a re-entry starts clean
     selected.value = new Set();
     navigate("/session/number-map");
@@ -101,16 +117,6 @@ export function NewSessionPage() {
   useEffect(() => {
     void loadAux();
   }, []);
-
-  if (!authStore.isAdmin.value) {
-    return (
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-        <h2>セッション開始</h2>
-        <p>セッションの開始は幹事のみです。</p>
-        <p><a href="/login">ログインする</a> · <a href="/">ホームへ戻る</a></p>
-      </main>
-    );
-  }
 
   const canSubmit = selected.value.size >= 2 && location.value.trim().length > 0 && !submitting.value;
 

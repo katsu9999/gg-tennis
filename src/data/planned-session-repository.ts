@@ -12,25 +12,22 @@ export interface PlannedSessionRow {
   created_by: string | null;
 }
 
+/**
+ * v1.1 Model A: write methods (`create`, `rotateToken`, `delete`) are
+ * PIN-gated and go through SECURITY DEFINER RPC functions. Reads remain plain
+ * anon SELECTs.
+ */
 export interface PlannedSessionRepository {
   list(): Promise<PlannedSessionRow[]>;
   loadById(id: string): Promise<PlannedSessionRow | null>;
   loadByToken(token: string): Promise<PlannedSessionRow | null>;
   loadNext(): Promise<PlannedSessionRow | null>;
-  create(input: Omit<PlannedSessionRow, "id" | "created_at">): Promise<PlannedSessionRow>;
-  rotateToken(id: string): Promise<string>;
-  delete(id: string): Promise<void>;
-}
-
-/**
- * 48-char alphanumeric token (24 bytes → base36, 2 chars/byte) used as the
- * public RSVP URL slug. Requires Node 19+ or a browser with Web Crypto.
- */
-function generateToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  let out = "";
-  for (const b of bytes) out += b.toString(36).padStart(2, "0");
-  return out;
+  create(
+    input: Omit<PlannedSessionRow, "id" | "created_at">,
+    pin: string,
+  ): Promise<PlannedSessionRow>;
+  rotateToken(id: string, pin: string): Promise<string>;
+  delete(id: string, pin: string): Promise<void>;
 }
 
 export function createPlannedSessionRepository(supabase: SupabaseClient): PlannedSessionRepository {
@@ -57,19 +54,34 @@ export function createPlannedSessionRepository(supabase: SupabaseClient): Planne
       if (error) throw error;
       return (data as PlannedSessionRow | null) ?? null;
     },
-    async create(input) {
-      const { data, error } = await t().insert(input).select().single();
+    async create(input, pin) {
+      const { data: id, error } = await supabase.rpc("upsert_planned_session", {
+        p_pin: pin,
+        p_id: null,
+        p_date: input.date,
+        p_location: input.location,
+        p_court_count: input.court_count,
+        p_allow_singles: input.allow_singles,
+        p_show_going_list_on_public: input.show_going_list_on_public,
+      });
       if (error) throw error;
-      return data as PlannedSessionRow;
+      const row = await this.loadById(id as string);
+      if (!row) throw new Error("planned_session created but could not be reloaded");
+      return row;
     },
-    async rotateToken(id) {
-      const token = generateToken();
-      const { error } = await t().update({ public_rsvp_token: token }).eq("id", id);
+    async rotateToken(id, pin) {
+      const { data: token, error } = await supabase.rpc("rotate_public_rsvp_token", {
+        p_pin: pin,
+        p_id: id,
+      });
       if (error) throw error;
-      return token;
+      return token as string;
     },
-    async delete(id) {
-      const { error } = await t().delete().eq("id", id);
+    async delete(id, pin) {
+      const { error } = await supabase.rpc("delete_planned_session", {
+        p_pin: pin,
+        p_id: id,
+      });
       if (error) throw error;
     },
   };

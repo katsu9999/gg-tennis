@@ -34,6 +34,10 @@ export interface InMemorySession {
   todayStats: Map<string, { play: number; rest: number }>;
   prevResters: AttendeeRef[];
   rngSeed: number;
+  /** v1.1 Model A: LocalStorage token of whoever started the session. */
+  hostToken: string | null;
+  /** v1.1 Model A: display label for the host. */
+  hostLabel: string | null;
 }
 
 export interface StartNewSessionInput {
@@ -43,6 +47,9 @@ export interface StartNewSessionInput {
   allowSingles: boolean;
   memberIds: number[];
   plannedSessionId?: string;
+  /** v1.1 Model A: identifies the device that's starting (label-only). */
+  hostToken?: string | null;
+  hostLabel?: string | null;
 }
 
 export interface SessionStore {
@@ -82,6 +89,8 @@ function toSessionRow(s: InMemorySession): SessionRow {
     next_today_number: s.attendees.length + 1,
     current_round_index: s.currentRoundIndex,
     created_at: new Date().toISOString(),
+    host_token: s.hostToken,
+    host_label: s.hostLabel,
   };
 }
 
@@ -154,6 +163,8 @@ export function createSessionStore(deps: {
       todayStats,
       prevResters: [],
       rngSeed: deriveRngSeed(input.date),
+      hostToken: input.hostToken ?? null,
+      hostLabel: input.hostLabel ?? null,
     };
 
     session.value = s;

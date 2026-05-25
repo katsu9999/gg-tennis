@@ -2,16 +2,20 @@ import { computed, signal, type Signal, type ReadonlySignal } from "@preact/sign
 import type { Member } from "@/engine/models";
 import type { MemberRepository } from "@/data/member-repository";
 
+/**
+ * v1.1 Model A: write methods accept a `pin` argument. Callers (UI pages)
+ * fetch it from `pinStore.getPin()` after the user has unlocked.
+ */
 export interface RosterStore {
   all: Signal<Member[]>;
   active: ReadonlySignal<Member[]>;
   archived: ReadonlySignal<Member[]>;
   load(): Promise<void>;
-  add(name: string): Promise<void>;
-  rename(id: number, name: string): Promise<void>;
-  archive(id: number): Promise<void>;
-  unarchive(id: number): Promise<void>;
-  hardDelete(id: number): Promise<void>;
+  add(name: string, pin: string): Promise<void>;
+  rename(id: number, name: string, pin: string): Promise<void>;
+  archive(id: number, pin: string): Promise<void>;
+  unarchive(id: number, pin: string): Promise<void>;
+  hardDelete(id: number, pin: string): Promise<void>;
 }
 
 export function createRosterStore(repo: MemberRepository): RosterStore {
@@ -30,24 +34,24 @@ export function createRosterStore(repo: MemberRepository): RosterStore {
     async load() {
       all.value = await repo.listAll();
     },
-    async add(name) {
-      const m = await repo.add({ name });
+    async add(name, pin) {
+      const m = await repo.add({ name, pin });
       all.value = [...all.value, m];
     },
-    async rename(id, name) {
-      const m = await repo.rename(id, name);
+    async rename(id, name, pin) {
+      const m = await repo.rename(id, name, pin);
       replace(id, m);
     },
-    async archive(id) {
-      const m = await repo.archive(id);
+    async archive(id, pin) {
+      const m = await repo.archive(id, pin);
       replace(id, m);
     },
-    async unarchive(id) {
-      const m = await repo.unarchive(id);
+    async unarchive(id, pin) {
+      const m = await repo.unarchive(id, pin);
       replace(id, m);
     },
-    async hardDelete(id) {
-      await repo.hardDelete(id);
+    async hardDelete(id, pin) {
+      await repo.hardDelete(id, pin);
       all.value = all.value.filter(x => x.id !== id);
     },
   };

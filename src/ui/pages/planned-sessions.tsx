@@ -1,9 +1,16 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import { plannedSessionStore, rsvpStore, rosterStore, authStore } from "@/ui/stores";
+import { plannedSessionStore, rsvpStore, rosterStore, pinStore } from "@/ui/stores";
+import { useRequirePin } from "@/ui/components/pin-modal";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import type { RsvpStatus } from "@/data/rsvp-repository";
 import { navigate } from "@/ui/router";
+
+function requirePin(): string {
+  const pin = pinStore.getPin();
+  if (!pin) throw new Error("PIN がロックされています");
+  return pin;
+}
 
 interface FormState {
   date: string;
@@ -56,8 +63,8 @@ async function submitCreate(): Promise<void> {
       allow_singles: form.value.allowSingles,
       public_rsvp_token: null,
       show_going_list_on_public: form.value.showGoingListOnPublic,
-      created_by: authStore.email.value,
-    });
+      created_by: null,
+    }, requirePin());
     await rsvpStore.loadForSession(created.id);
     form.value = initialForm();
   } catch (e) {
@@ -89,7 +96,7 @@ async function copyPublicLink(sessionId: string, existingToken: string | null): 
   busy.value = true;
   error.value = null;
   try {
-    const token = existingToken ?? (await plannedSessionStore.rotateToken(sessionId));
+    const token = existingToken ?? (await plannedSessionStore.rotateToken(sessionId, requirePin()));
     const url = `${window.location.origin}/rsvp/${token}`;
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
@@ -109,7 +116,7 @@ async function rotateLink(sessionId: string): Promise<void> {
   busy.value = true;
   error.value = null;
   try {
-    await plannedSessionStore.rotateToken(sessionId);
+    await plannedSessionStore.rotateToken(sessionId, requirePin());
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -122,7 +129,7 @@ async function deletePlanned(id: string): Promise<void> {
   busy.value = true;
   error.value = null;
   try {
-    await plannedSessionStore.delete(id);
+    await plannedSessionStore.delete(id, requirePin());
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -145,14 +152,7 @@ export function PlannedSessionsPage() {
     void refreshAll();
   }, []);
 
-  if (!authStore.isAdmin.value) {
-    return (
-      <main style={{ maxWidth: 760, margin: "0 auto", padding: 20 }}>
-        <h2>将来セッション</h2>
-        <p>幹事のみです。<a href="/login">ログイン</a> · <a href="/">ホームへ</a></p>
-      </main>
-    );
-  }
+  const { gate, modal } = useRequirePin();
 
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 20 }}>
@@ -160,6 +160,9 @@ export function PlannedSessionsPage() {
 
       <section class="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>新規作成</h3>
+        <p class="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+          作成・編集・削除にはクラブ PIN が必要です。
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           <label>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>日付</div>
@@ -228,7 +231,7 @@ export function PlannedSessionsPage() {
           class="btn-primary"
           data-testid="planned-create"
           disabled={busy.value || !form.value.location.trim() || !form.value.date}
-          onClick={() => { void submitCreate(); }}
+          onClick={() => gate(submitCreate)}
         >
           作成
         </button>
@@ -255,7 +258,7 @@ export function PlannedSessionsPage() {
                 <button
                   type="button"
                   data-testid={`planned-delete-${ps.id}`}
-                  onClick={() => { void deletePlanned(ps.id); }}
+                  onClick={() => gate(() => deletePlanned(ps.id))}
                   disabled={busy.value}
                   style={{ ...ghostButton, color: "crimson", borderColor: "crimson" }}
                 >
@@ -307,7 +310,13 @@ export function PlannedSessionsPage() {
                 <button
                   type="button"
                   data-testid={`planned-copy-link-${ps.id}`}
-                  onClick={() => { void copyPublicLink(ps.id, ps.public_rsvp_token); }}
+                  onClick={() => {
+                    if (ps.public_rsvp_token) {
+                      void copyPublicLink(ps.id, ps.public_rsvp_token);
+                    } else {
+                      gate(() => copyPublicLink(ps.id, null));
+                    }
+                  }}
                   disabled={busy.value}
                   style={ghostButton}
                 >
@@ -317,7 +326,7 @@ export function PlannedSessionsPage() {
                   <button
                     type="button"
                     data-testid={`planned-rotate-${ps.id}`}
-                    onClick={() => { void rotateLink(ps.id); }}
+                    onClick={() => gate(() => rotateLink(ps.id))}
                     disabled={busy.value}
                     style={ghostButton}
                   >
@@ -342,6 +351,8 @@ export function PlannedSessionsPage() {
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
         <a href="/">← ホーム</a>
       </p>
+
+      {modal}
     </main>
   );
 }
