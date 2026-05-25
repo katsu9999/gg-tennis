@@ -224,7 +224,10 @@ export function createSessionStore(deps: {
     s.currentRoundIndex = roundIndex;
     s.prevResters = resters;
 
-    // Trigger signal reactivity by reassigning
+    // Trigger signal reactivity by reassigning. Note: this is a shallow spread —
+    // `rounds`/`todayStats` are the same references as before the mutations above.
+    // Adequate for v1 (Preact subscribers re-read on render). Time-travel / undo
+    // would need a deep clone here.
     session.value = { ...s };
 
     // 9. Persist session

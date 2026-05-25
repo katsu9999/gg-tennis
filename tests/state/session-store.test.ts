@@ -204,4 +204,35 @@ describe("session store", () => {
     await expect(store.endSession()).resolves.toBeUndefined();
     expect(deps.sessionRepo.upsert).not.toHaveBeenCalled();
   });
+
+  // Test 11: startNewSession → nextRound → endSession flushes pair history
+  // The most critical data-persistence path: history accumulated during the
+  // session MUST land in historyRepo.upsertPairWeights at endSession time, or
+  // ranking drift accumulates across sessions silently.
+  it("endSession flushes accumulated pair history via historyRepo.upsertPairWeights", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, memberIds: [1, 2, 3, 4, 5, 6, 7, 8] });
+    await store.nextRound();
+
+    // A round of 8 players in 2 doubles courts produces:
+    //  - 2 partner pairs (one per team per court ⇒ 4 partner pairs total, but
+    //    since each court has 2 teams of 2, that's C(2,2)=1 partner pair per
+    //    team × 4 teams = 4 partner pair-events; written into partnerW as 4 keys)
+    //  - 4 × 4 = 16 cross-team opponent pair-events on the 2 courts (8 per court).
+    // Exact counts don't matter — the test just asserts the flush happened with
+    // non-empty data.
+    await store.endSession();
+
+    expect(deps.historyRepo.upsertPairWeights).toHaveBeenCalledTimes(1);
+    const updates = (deps.historyRepo.upsertPairWeights as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(Array.isArray(updates)).toBe(true);
+    expect((updates as unknown[]).length).toBeGreaterThan(0);
+    // Each update row should have the canonical pair key shape (a < b)
+    for (const u of updates as { a: number; b: number; partnerW: number; opponentW: number }[]) {
+      expect(u.a).toBeLessThan(u.b);
+      expect(typeof u.partnerW).toBe("number");
+      expect(typeof u.opponentW).toBe("number");
+    }
+  });
 });
