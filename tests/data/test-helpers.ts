@@ -80,9 +80,11 @@ function makeTableBuilder<TRow>(resp: TableResponses<TRow>) {
     order: vi.fn().mockResolvedValue(listResult),
     single: vi.fn().mockImplementation(async () => singleResult()),
     maybeSingle: vi.fn().mockResolvedValue(maybeSingleResult),
-    // `await builder` (no terminal) — used by `.delete().eq()` paths in the real SDK.
+    // `await builder` (no terminal) — supports both:
+    //   `.delete().eq(...)` (where data is irrelevant; just check error) and
+    //   `.select("*")` without `.order()` (where data is the configured list).
     then: (resolve: (v: { data: unknown; error: unknown }) => void) =>
-      resolve({ data: null, error: err }),
+      resolve({ data: resp.list ?? null, error: err }),
   });
 
   return builder;

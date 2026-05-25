@@ -4,13 +4,28 @@ import { createHistoryRepository } from "@/data/history-repository";
 
 describe("HistoryRepository", () => {
   it("loadPairHistory returns empty maps when table is empty", async () => {
-    // The fake client's `then` path (used by `await t().select("*")`) returns null data.
-    // The repository coerces null → [] so both maps should be empty.
     const c = fakeClient({ pair_history: {} });
     const repo = createHistoryRepository(c);
     const history = await repo.loadPairHistory();
     expect(history.partnerW.size).toBe(0);
     expect(history.opponentW.size).toBe(0);
+  });
+
+  it("loadPairHistory maps rows into canonical-key Maps", async () => {
+    const c = fakeClient({
+      pair_history: {
+        list: [
+          { member_a: 1, member_b: 2, partner_w: 3.5, opponent_w: 1.2 },
+          { member_a: 3, member_b: 7, partner_w: 0.7, opponent_w: 2.1 },
+        ],
+      },
+    });
+    const repo = createHistoryRepository(c);
+    const h = await repo.loadPairHistory();
+    expect(h.partnerW.get("1:2")).toBeCloseTo(3.5);
+    expect(h.partnerW.get("3:7")).toBeCloseTo(0.7);
+    expect(h.opponentW.get("1:2")).toBeCloseTo(1.2);
+    expect(h.opponentW.get("3:7")).toBeCloseTo(2.1);
   });
 
   it("upsertPairWeights enforces member_a < member_b ordering", async () => {
