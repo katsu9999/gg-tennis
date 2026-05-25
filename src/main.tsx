@@ -11,6 +11,7 @@ import { NumberMapPage } from "@/ui/pages/number-map";
 import { RoundPage } from "@/ui/pages/round";
 import { HistoryPage } from "@/ui/pages/history";
 import { RosterPage } from "@/ui/pages/roster";
+import { PlannedSessionsPage } from "@/ui/pages/planned-sessions";
 
 const route = computed(() => matchRoute(currentPath.value));
 
@@ -34,6 +35,7 @@ function App() {
     case "round": return <RoundPage />;
     case "history": return <HistoryPage />;
     case "roster": return <RosterPage />;
+    case "planned-sessions": return <PlannedSessionsPage />;
     default:
       return <ComingSoon name={r.name} />;
   }
