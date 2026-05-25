@@ -7,7 +7,7 @@ import "@/ui/theme.css";
 import { HomePage } from "@/ui/pages/home";
 import { NewSessionPage } from "@/ui/pages/new-session";
 import { NumberMapPage } from "@/ui/pages/number-map";
-// import { RoundPage } from "@/ui/pages/round";
+import { RoundPage } from "@/ui/pages/round";
 // import { HistoryPage } from "@/ui/pages/history";
 
 const route = computed(() => matchRoute(currentPath.value));
@@ -28,7 +28,7 @@ function App() {
     case "home": return <HomePage />;
     case "new-session": return <NewSessionPage />;
     case "number-map": return <NumberMapPage />;
-    // case "round": return <RoundPage />;
+    case "round": return <RoundPage />;
     // case "history": return <HistoryPage />;
     default:
       return <ComingSoon name={r.name} />;
