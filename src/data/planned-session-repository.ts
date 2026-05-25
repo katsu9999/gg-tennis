@@ -22,6 +22,10 @@ export interface PlannedSessionRepository {
   delete(id: string): Promise<void>;
 }
 
+/**
+ * 48-char alphanumeric token (24 bytes → base36, 2 chars/byte) used as the
+ * public RSVP URL slug. Requires Node 19+ or a browser with Web Crypto.
+ */
 function generateToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   let out = "";

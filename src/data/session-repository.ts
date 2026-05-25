@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Wire shape of the `sessions` table row.
+ *
+ * `attendees`, `rounds`, and `today_stats` are JSONB columns whose in-memory
+ * shapes (Attendee[], Round[], Map<...>) live in the engine layer. The repo
+ * stays as a thin persistence boundary; Phase 3's session-store does the cast.
+ */
 export interface SessionRow {
   id: string;
   status: "ongoing" | "past";

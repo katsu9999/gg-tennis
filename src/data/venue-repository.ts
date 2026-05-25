@@ -14,7 +14,9 @@ export function createVenueRepository(supabase: SupabaseClient): VenueRepository
       return (data ?? []).map(r => (r as { name: string }).name);
     },
     async add(name) {
-      const { error } = await t().upsert({ name });
+      // Conflict target = `name` (unique constraint). Without onConflict, Supabase
+      // upsert defaults to the primary key, which would let duplicate names through.
+      const { error } = await t().upsert({ name }, { onConflict: "name" });
       if (error) throw error;
     },
   };
