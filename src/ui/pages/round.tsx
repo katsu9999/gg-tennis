@@ -128,6 +128,31 @@ export function RoundPage() {
           次のラウンド <span class="a">→</span>
         </button>
       </div>
+
+      <button
+        type="button"
+        data-testid="end-session-btn"
+        onClick={async () => {
+          if (!confirm("今日のセッションを終了します。ペア履歴が保存されます。よろしいですか？")) return;
+          await sessionStore.endSession();
+          navigate("/");
+        }}
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: 16,
+          padding: "10px 12px",
+          background: "transparent",
+          border: "1.5px solid var(--line)",
+          borderRadius: 8,
+          color: "var(--muted)",
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        セッション終了
+      </button>
     </main>
   );
 }
