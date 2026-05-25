@@ -51,6 +51,7 @@ create table if not exists match_log (
   played_at       timestamptz not null
 );
 create index if not exists match_log_played_at_idx on match_log(played_at);
+create index if not exists match_log_session_id_idx on match_log(session_id);
 
 create table if not exists settings (
   id                    int primary key default 1,
