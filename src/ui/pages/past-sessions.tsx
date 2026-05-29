@@ -11,14 +11,14 @@ import { useRequirePin } from "@/ui/components/pin-modal";
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
 const selected = signal<SessionRow | null>(null);
-const showNames = signal(true);
+const showNames = signal(false);
 const busy = signal(false);
 
 export function resetPastSessionsState(): void {
   list.value = [];
   loading.value = true;
   selected.value = null;
-  showNames.value = true;
+  showNames.value = false;
   busy.value = false;
 }
 

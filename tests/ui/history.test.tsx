@@ -97,21 +97,21 @@ describe("HistoryPage", () => {
     expect(getByText(/履歴なし/)).toBeDefined();
   });
 
-  it("renders the first round with member names by default", () => {
+  it("renders the first round with today-numbers by default", () => {
     (sessionStore.session as { value: unknown }).value = makeSession(3);
     const { getByText, container } = render(<HistoryPage />);
     expect(container.textContent).toContain("R1");
     expect(container.textContent).toContain("/ 3");
-    expect(getByText("佐藤")).toBeDefined();
-    expect(getByText("山本")).toBeDefined();
+    expect(getByText("7")).toBeDefined();
+    expect(getByText("3")).toBeDefined();
   });
 
-  it("toggling 'name display' off reveals today-numbers", () => {
+  it("toggling 'name display' shows real member names", () => {
     (sessionStore.session as { value: unknown }).value = makeSession(1);
     const { getByText, getByTestId } = render(<HistoryPage />);
     fireEvent.click(getByTestId("name-toggle"));
-    expect(getByText("7")).toBeDefined();
-    expect(getByText("3")).toBeDefined();
+    expect(getByText("佐藤")).toBeDefined();
+    expect(getByText("山本")).toBeDefined();
   });
 
   it("next/prev round buttons navigate the cursor", () => {
