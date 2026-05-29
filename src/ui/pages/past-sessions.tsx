@@ -2,7 +2,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { memberIdsFrom } from "@/engine/models";
-import { rosterStore, sessionRepo, matchLogRepo, pinStore } from "@/ui/stores";
+import { rosterStore, sessionRepo, matchLogRepo, pinStore, rankingStore } from "@/ui/stores";
 import type { SessionRow } from "@/data/session-repository";
 import { CourtView } from "@/ui/components/court-view";
 import { linkTo } from "@/ui/router";
@@ -20,6 +20,24 @@ export function resetPastSessionsState(): void {
   selected.value = null;
   showNames.value = false;
   busy.value = false;
+}
+
+/** Supabase errors are plain `{ message, details, hint, code }` objects, not
+ *  Error instances, so `String(err)` turns them into "[object Object]". This
+ *  surfaces every useful field so the operator can see what actually broke. */
+function formatError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null) {
+    const o = e as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof o.message === "string") parts.push(o.message);
+    if (typeof o.details === "string") parts.push(`details: ${o.details}`);
+    if (typeof o.hint === "string") parts.push(`hint: ${o.hint}`);
+    if (typeof o.code === "string") parts.push(`code: ${o.code}`);
+    if (parts.length) return parts.join("\n");
+    try { return JSON.stringify(e); } catch { /* fall through */ }
+  }
+  return String(e);
 }
 
 async function loadList(): Promise<void> {
@@ -120,9 +138,11 @@ function SessionDetail({ session }: { session: SessionRow }) {
       const updated = await updatePastCourtWinner(session, roundIndex, courtNumber, w);
       selected.value = updated;
       list.value = list.value.map((s) => (s.id === updated.id ? updated : s));
+      // Refresh ranking so deleted/edited results are reflected immediately.
+      void rankingStore.load();
     } catch (e) {
       console.error("update past winner failed", e);
-      alert(`勝敗の更新に失敗しました:\n${e instanceof Error ? e.message : String(e)}`);
+      alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
     }
   }
 
@@ -138,9 +158,13 @@ function SessionDetail({ session }: { session: SessionRow }) {
         await sessionRepo.deleteById(session.id, pin);
         list.value = list.value.filter((s) => s.id !== session.id);
         selected.value = null;
+        // Refresh ranking — match_log cascades on session delete, so pair/elo
+        // counts must drop. Without this, the page shows stale numbers until
+        // the user manually navigates away and back.
+        void rankingStore.load();
       } catch (e) {
         console.error("delete session failed", e);
-        alert(`セッション削除に失敗しました:\n${e instanceof Error ? e.message : String(e)}`);
+        alert(`セッション削除に失敗しました:\n${formatError(e)}`);
       } finally {
         busy.value = false;
       }
