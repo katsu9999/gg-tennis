@@ -53,11 +53,16 @@ export function createMatchLogRepository(supabase: SupabaseClient): MatchLogRepo
       if (error) throw error;
     },
     async deleteByRoundCourt(sessionId, roundIndex, teamA) {
+      // PostgREST serialises JS arrays via toString() → "5,9", which Postgres
+      // then tries to cast to bigint[] and fails with
+      //   "malformed array literal: \"5,9\""
+      // We have to hand-format the PG array literal "{5,9}" so the cast works.
+      const teamALiteral = `{${teamA.join(",")}}`;
       const { error } = await t()
         .delete()
         .eq("session_id", sessionId)
         .eq("round_index", roundIndex)
-        .eq("team_a", teamA);
+        .eq("team_a", teamALiteral);
       if (error) throw error;
     },
   };
