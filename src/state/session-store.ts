@@ -286,28 +286,33 @@ export function createSessionStore(deps: {
     const teamBIds = memberIdsFrom(court.teamB);
     const bothSidesHaveMembers = teamAIds.length > 0 && teamBIds.length > 0;
 
-    if (winner === null) {
-      court.winner = "none";
-      if (bothSidesHaveMembers) {
+    // Mutate + publish the new winner BEFORE awaiting network work. Otherwise
+    // a network failure (or a slow RPC) leaves the in-memory winner set but
+    // the signal stale, so the green tick only appears on the next unrelated
+    // re-render (e.g. toggling the 名前 checkbox).
+    court.winner = winner === null ? "none" : winner;
+    session.value = { ...s };
+
+    if (bothSidesHaveMembers) {
+      try {
+        // Always clear any prior log row for this court first.
         await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, teamAIds);
-      }
-    } else {
-      court.winner = winner;
-      if (bothSidesHaveMembers) {
-        // Replace any prior log row for this court before inserting the new winner.
-        await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, teamAIds);
-        await matchLogRepo.add({
-          sessionId: s.id,
-          roundIndex: s.currentRoundIndex,
-          courtType: court.type,
-          teamA: teamAIds,
-          teamB: teamBIds,
-          winner,
-        });
+        if (winner !== null) {
+          await matchLogRepo.add({
+            sessionId: s.id,
+            roundIndex: s.currentRoundIndex,
+            courtType: court.type,
+            teamA: teamAIds,
+            teamB: teamBIds,
+            winner,
+          });
+        }
+      } catch (e) {
+        console.error("recordWinner: match_log sync failed", e);
+        throw e;
       }
     }
 
-    session.value = { ...s };
     await sessionRepo.upsert(toSessionRow(session.value));
   }
 
