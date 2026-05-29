@@ -55,6 +55,36 @@ describe("CourtView", () => {
     expect(fn).toHaveBeenCalledWith("B");
   });
 
+  it("emits null when tapping team A that is already the winner (deselect)", () => {
+    const fn = vi.fn();
+    const won: Court = { ...baseCourt, winner: "A" };
+    const { getByTestId } = render(
+      <CourtView court={won} todayNumbers={todayNumbers} nameFor={noNames} onSetWinner={fn} />,
+    );
+    fireEvent.click(getByTestId("team-a"));
+    expect(fn).toHaveBeenCalledWith(null);
+  });
+
+  it("emits null when tapping team B that is already the winner (deselect)", () => {
+    const fn = vi.fn();
+    const won: Court = { ...baseCourt, winner: "B" };
+    const { getByTestId } = render(
+      <CourtView court={won} todayNumbers={todayNumbers} nameFor={noNames} onSetWinner={fn} />,
+    );
+    fireEvent.click(getByTestId("team-b"));
+    expect(fn).toHaveBeenCalledWith(null);
+  });
+
+  it("emits 'B' when tapping team B while A is currently the winner (switch)", () => {
+    const fn = vi.fn();
+    const won: Court = { ...baseCourt, winner: "A" };
+    const { getByTestId } = render(
+      <CourtView court={won} todayNumbers={todayNumbers} nameFor={noNames} onSetWinner={fn} />,
+    );
+    fireEvent.click(getByTestId("team-b"));
+    expect(fn).toHaveBeenCalledWith("B");
+  });
+
   it("renders ✓ on the winning side when winner='A'", () => {
     const won: Court = { ...baseCourt, winner: "A" };
     const { container } = render(

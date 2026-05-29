@@ -7,7 +7,7 @@ export interface CourtViewProps {
   todayNumbers: Record<number, number>;
   /** ref → name. Null if not resolvable. */
   nameFor: (ref: AttendeeRef) => string | null;
-  onSetWinner: (winner: "A" | "B") => void;
+  onSetWinner: (winner: "A" | "B" | null) => void;
   showNames?: boolean;
 }
 
@@ -35,15 +35,15 @@ export function CourtView(props: CourtViewProps) {
 
   const sideStyleBase: JSX.CSSProperties = {
     border: "none",
-    padding: "16px 12px",
+    padding: "10px 8px",
     margin: 0,
     borderRadius: 10,
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    gap: 8,
-    minHeight: 96,
+    gap: 6,
+    minHeight: 64,
     cursor: "pointer",
   };
 
@@ -62,10 +62,10 @@ export function CourtView(props: CourtViewProps) {
   };
 
   return (
-    <div class="card" style={{ marginBottom: 12 }} data-court-number={court.number}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong style={{ letterSpacing: "0.05em" }}>COURT {court.number}</strong>
-        <span class={court.type === "doubles" ? "tag-d" : "tag-s"}>
+    <div class="card" style={{ marginBottom: 8, padding: 8 }} data-court-number={court.number}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <strong style={{ letterSpacing: "0.05em", fontSize: 13 }}>COURT {court.number}</strong>
+        <span class={court.type === "doubles" ? "tag-d" : "tag-s"} style={{ fontSize: 11 }}>
           {court.type === "doubles" ? "ダブルス" : "シングルス"}
         </span>
       </div>
@@ -86,7 +86,7 @@ export function CourtView(props: CourtViewProps) {
           type="button"
           data-testid="team-a"
           aria-label="Team A wins"
-          onClick={() => onSetWinner("A")}
+          onClick={() => onSetWinner(winA ? null : "A")}
           style={teamAStyle}
         >
           {winA && (
@@ -102,7 +102,7 @@ export function CourtView(props: CourtViewProps) {
           type="button"
           data-testid="team-b"
           aria-label="Team B wins"
-          onClick={() => onSetWinner("B")}
+          onClick={() => onSetWinner(winB ? null : "B")}
           style={teamBStyle}
         >
           {winB && (

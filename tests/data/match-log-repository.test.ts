@@ -49,4 +49,11 @@ describe("MatchLogRepository", () => {
     await expect(repo.deleteBySession("sess-3")).resolves.toBeUndefined();
     expect(c.from).toHaveBeenCalledWith("match_log");
   });
+
+  it("deleteByRoundCourt resolves without throwing", async () => {
+    const c = fakeClient({ match_log: {} });
+    const repo = createMatchLogRepository(c);
+    await expect(repo.deleteByRoundCourt("sess-4", 2, [1, 2])).resolves.toBeUndefined();
+    expect(c.from).toHaveBeenCalledWith("match_log");
+  });
 });

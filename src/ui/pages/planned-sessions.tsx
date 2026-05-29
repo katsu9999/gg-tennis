@@ -4,7 +4,7 @@ import { plannedSessionStore, rsvpStore, rosterStore, pinStore } from "@/ui/stor
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import type { RsvpStatus } from "@/data/rsvp-repository";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
 
 function requirePin(): string {
   const pin = pinStore.getPin();
@@ -349,7 +349,7 @@ export function PlannedSessionsPage() {
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href="/">← ホーム</a>
+        <a href={linkTo("/")}>← ホーム</a>
       </p>
 
       {modal}

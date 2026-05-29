@@ -38,7 +38,7 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
     if (ok) {
       onUnlocked();
     } else {
-      setErr("PIN が違います");
+      setErr(pinStore.lastError.value ?? "PIN が違います");
       setPin("");
       inputRef.current?.focus();
     }

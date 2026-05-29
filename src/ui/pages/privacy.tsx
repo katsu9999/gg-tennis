@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { PRIVACY_JA, PRIVACY_EN } from "@/ui/privacy-content";
 import type { ComponentChildren } from "preact";
+import { linkTo } from "@/ui/router";
 
 const lang = signal<"ja" | "en">("ja");
 
@@ -103,7 +104,7 @@ export function PrivacyPage() {
       </article>
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href="/">← ホーム</a>
+        <a href={linkTo("/")}>← ホーム</a>
       </p>
     </main>
   );

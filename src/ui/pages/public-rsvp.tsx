@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { plannedSessionRepo, rsvpRepo, memberRepo } from "@/ui/stores";
+import { linkTo } from "@/ui/router";
 import type { PlannedSessionRow } from "@/data/planned-session-repository";
 import type { RsvpRow, RsvpStatus } from "@/data/rsvp-repository";
 import type { Member } from "@/engine/models";
@@ -235,7 +236,7 @@ export function PublicRsvpPage({ token }: Props) {
       </section>
 
       <footer style={{ marginTop: 24 }} class="muted">
-        <small><a href="/privacy">プライバシー</a> · クラブ内輪共有のみ。SNSへの転載はご遠慮ください。</small>
+        <small><a href={linkTo("/privacy")}>プライバシー</a> · クラブ内輪共有のみ。SNSへの転載はご遠慮ください。</small>
       </footer>
     </main>
   );

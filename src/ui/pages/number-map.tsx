@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import type { InMemorySession } from "@/state/session-store";
 
@@ -15,7 +15,7 @@ export function NumberMapPage() {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
         <h2>セッションが開始されていません</h2>
-        <p><a href="/session/new">新規セッションを作成</a></p>
+        <p><a href={linkTo("/session/new")}>新規セッションを作成</a></p>
       </main>
     );
   }

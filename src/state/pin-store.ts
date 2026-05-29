@@ -18,6 +18,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export interface PinStore {
   isUnlocked: Signal<boolean>;
   verifying: Signal<boolean>;
+  /** Last error message from a verify call (RPC-level), or null. */
+  lastError: Signal<string | null>;
   /** Verify the PIN against the server; on success, cache it for this page. */
   verify(pin: string): Promise<boolean>;
   /** Return the cached PIN if unlocked, else null. Used by RPC callers. */
@@ -29,25 +31,39 @@ export interface PinStore {
 export function createPinStore(supabase: SupabaseClient): PinStore {
   const isUnlocked = signal(false);
   const verifying = signal(false);
+  const lastError = signal<string | null>(null);
   let cachedPin: string | null = null;
 
   return {
     isUnlocked,
     verifying,
+    lastError,
     async verify(pin) {
-      if (!pin) return false;
+      if (!pin) {
+        lastError.value = null;
+        return false;
+      }
       verifying.value = true;
+      lastError.value = null;
       try {
         const { data, error } = await supabase.rpc("verify_club_pin", {
           pin_input: pin,
         });
-        if (error) return false;
+        if (error) {
+          console.error("verify_club_pin RPC failed:", error);
+          lastError.value = `サーバーエラー: ${error.message ?? "不明"} (migrations 0004-0006 が未適用かも)`;
+          return false;
+        }
         const ok = data === true;
         if (ok) {
           cachedPin = pin;
           isUnlocked.value = true;
         }
         return ok;
+      } catch (e) {
+        console.error("verify_club_pin threw:", e);
+        lastError.value = `通信エラー: ${e instanceof Error ? e.message : String(e)}`;
+        return false;
       } finally {
         verifying.value = false;
       }

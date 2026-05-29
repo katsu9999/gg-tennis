@@ -32,6 +32,7 @@ vi.mock("@/ui/stores", async () => {
       session: signal(null),
       startNewSession: vi.fn(),
       nextRound: vi.fn().mockResolvedValue(undefined),
+      goToPreviousRound: vi.fn(),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
     },
@@ -90,11 +91,16 @@ function makeSession(round: Round, resters: { kind: "member"; memberId: number }
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(sessionStore.recordWinner).mockClear();
   vi.mocked(sessionStore.nextRound).mockClear();
+  vi.mocked(sessionStore.goToPreviousRound).mockClear();
   sessionStore.session.value = null;
   currentPath.value = "/session/round";
+  // These tests assert today-numbers (not names); default is showNames=true,
+  // so flip it off for the body of the suite.
+  const { setRoundShowNames } = await import("@/ui/pages/round");
+  setRoundShowNames(false);
 });
 
 describe("RoundPage", () => {
@@ -110,11 +116,11 @@ describe("RoundPage", () => {
     expect(getByText(/準備中/)).toBeDefined();
   });
 
-  it("renders the round header with R-number and attendee/court summary", () => {
+  it("renders the round header with R-number and rounds count", () => {
     sessionStore.session.value = makeSession(makeRound());
-    const { container, getByText } = render(<RoundPage />);
+    const { container } = render(<RoundPage />);
     expect(container.textContent).toContain("R1");
-    expect(getByText(/4人 · 1コート/)).toBeDefined();
+    expect(container.textContent).toMatch(/R1 \/ 1/);
   });
 
   it("renders each court via CourtView with the today-numbers shown", () => {
@@ -157,7 +163,7 @@ describe("RoundPage", () => {
     await waitFor(() => expect(sessionStore.nextRound).toHaveBeenCalled());
   });
 
-  it("clicking 前のラウンド navigates to /session/history", () => {
+  it("clicking 前のラウンド calls goToPreviousRound", () => {
     const base = makeSession(makeRound());
     sessionStore.session.value = {
       ...base,
@@ -166,7 +172,7 @@ describe("RoundPage", () => {
     };
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("prev-round-btn"));
-    expect(currentPath.value).toBe("/session/history");
+    expect(sessionStore.goToPreviousRound).toHaveBeenCalled();
   });
 
   it("前のラウンド is disabled on round 0", () => {
