@@ -97,10 +97,8 @@ beforeEach(async () => {
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
   sessionStore.session.value = null;
   currentPath.value = "/session/round";
-  // These tests assert today-numbers (not names); default is showNames=true,
-  // so flip it off for the body of the suite.
-  const { setRoundShowNames } = await import("@/ui/pages/round");
-  setRoundShowNames(false);
+  const { resetRoundState } = await import("@/ui/pages/round");
+  resetRoundState();
 });
 
 describe("RoundPage", () => {
