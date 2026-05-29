@@ -5,11 +5,11 @@ import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { navigate, linkTo } from "@/ui/router";
 
-const showNames = signal(true);
+const showNames = signal(false);
 
 /** Test helper — resets module-scoped UI state. */
 export function resetRoundState(): void {
-  showNames.value = true;
+  showNames.value = false;
 }
 
 /** Test helper — set showNames programmatically. */

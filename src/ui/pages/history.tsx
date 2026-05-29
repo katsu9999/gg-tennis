@@ -8,12 +8,12 @@ import { navigate, linkTo } from "@/ui/router";
 // Module-scoped UI state. Survives navigation within the session; reset
 // inside `useEffect` based on session/round counts.
 const cursor = signal(0);
-const showNames = signal(true);
+const showNames = signal(false);
 
 /** Test helper — resets module-scoped UI state. */
 export function resetHistoryState(): void {
   cursor.value = 0;
-  showNames.value = true;
+  showNames.value = false;
 }
 
 export function HistoryPage() {
