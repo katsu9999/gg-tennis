@@ -136,7 +136,15 @@ export function HistoryPage() {
           todayNumbers={todayNumbers}
           nameFor={nameFor}
           showNames={showNames.value}
-          onSetWinner={(w) => { void sessionStore.recordWinner(c.number, w); }}
+          onSetWinner={(w) => {
+            sessionStore.recordWinner(c.number, w).catch((e) => {
+              console.error("recordWinner failed", e);
+              const msg = e instanceof Error
+                ? e.message
+                : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
+              alert(`勝敗の保存に失敗しました:\n${msg}`);
+            });
+          }}
         />
       ))}
 
