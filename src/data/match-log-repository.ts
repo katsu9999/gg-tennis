@@ -5,6 +5,7 @@ export interface MatchLogRepository {
   list(): Promise<MatchResult[]>;
   add(match: Omit<MatchResult, "at"> & { at?: Date }): Promise<MatchResult>;
   deleteBySession(sessionId: string): Promise<void>;
+  deleteByRoundCourt(sessionId: string, roundIndex: number, teamA: number[]): Promise<void>;
 }
 
 interface MatchLogRow {
@@ -49,6 +50,14 @@ export function createMatchLogRepository(supabase: SupabaseClient): MatchLogRepo
     },
     async deleteBySession(sessionId) {
       const { error } = await t().delete().eq("session_id", sessionId);
+      if (error) throw error;
+    },
+    async deleteByRoundCourt(sessionId, roundIndex, teamA) {
+      const { error } = await t()
+        .delete()
+        .eq("session_id", sessionId)
+        .eq("round_index", roundIndex)
+        .eq("team_a", teamA);
       if (error) throw error;
     },
   };

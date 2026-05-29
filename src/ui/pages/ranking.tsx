@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { rankingStore, rosterStore } from "@/ui/stores";
+import { linkTo } from "@/ui/router";
 
 type Tab = "elo" | "pair" | "attendance";
 
@@ -148,7 +149,7 @@ export function RankingPage() {
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href="/">← ホーム</a>
+        <a href={linkTo("/")}>← ホーム</a>
       </p>
     </main>
   );

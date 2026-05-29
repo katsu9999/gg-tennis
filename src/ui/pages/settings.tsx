@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { hostStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { supabase } from "@/data/supabase-client";
+import { linkTo } from "@/ui/router";
 
 export function SettingsPage() {
   return (
@@ -23,12 +24,12 @@ export function SettingsPage() {
       <section class="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>プライバシー</h3>
         <p style={{ margin: "8px 0" }}>
-          <a href="/privacy">プライバシーノーティス（日本語 / English）</a>
+          <a href={linkTo("/privacy")}>プライバシーノーティス（日本語 / English）</a>
         </p>
       </section>
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href="/">← ホーム</a>
+        <a href={linkTo("/")}>← ホーム</a>
       </p>
     </main>
   );

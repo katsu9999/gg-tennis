@@ -50,6 +50,7 @@ function makeRepos(
       list: vi.fn().mockResolvedValue(matches),
       add: vi.fn(),
       deleteBySession: vi.fn(),
+      deleteByRoundCourt: vi.fn(),
     },
     sessionRepo: {
       loadOngoing: vi.fn().mockResolvedValue(null),
@@ -57,6 +58,7 @@ function makeRepos(
       loadById: vi.fn().mockResolvedValue(null),
       upsert: vi.fn(),
       update: vi.fn(),
+      deleteById: vi.fn(),
     },
   };
 }

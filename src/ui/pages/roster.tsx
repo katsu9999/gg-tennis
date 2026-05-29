@@ -3,6 +3,7 @@ import { useEffect } from "preact/hooks";
 import { rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { exportMemberData } from "@/data/gdpr-export";
+import { linkTo } from "@/ui/router";
 
 // Module-scoped UI state
 const newName = signal("");
@@ -357,7 +358,7 @@ export function RosterPage() {
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href="/">← ホーム</a>
+        <a href={linkTo("/")}>← ホーム</a>
       </p>
 
       {modal}

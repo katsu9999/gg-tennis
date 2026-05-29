@@ -1,8 +1,21 @@
+import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
+
+const showNames = signal(true);
+
+/** Test helper — resets module-scoped UI state. */
+export function resetRoundState(): void {
+  showNames.value = true;
+}
+
+/** Test helper — set showNames programmatically. */
+export function setRoundShowNames(value: boolean): void {
+  showNames.value = value;
+}
 
 export function RoundPage() {
   useEffect(() => {
@@ -15,7 +28,7 @@ export function RoundPage() {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
         <h2>セッションが開始されていません</h2>
-        <p><a href="/session/new">新規セッションを作成</a></p>
+        <p><a href={linkTo("/session/new")}>新規セッションを作成</a></p>
       </main>
     );
   }
@@ -47,24 +60,37 @@ export function RoundPage() {
     return null;
   };
 
-  const resterNumbers = round.resters
-    .map((r) => (r.kind === "member" ? todayNumbers[r.memberId] : null))
-    .filter((n): n is number => typeof n === "number");
+  const resterLabels = round.resters.map((r) => {
+    if (r.kind === "member") {
+      if (showNames.value) return byMemberId.get(r.memberId) ?? `#${r.memberId}`;
+      const n = todayNumbers[r.memberId];
+      return typeof n === "number" ? String(n) : "?";
+    }
+    return "G";
+  });
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}>
+    <main style={{ maxWidth: 760, margin: "0 auto", padding: "8px 12px" }}>
       <header
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 12,
+          marginBottom: 6,
         }}
       >
-        <strong style={{ fontSize: 22 }}>
-          GG <span style={{ color: "var(--muted)", fontSize: 18 }}>· R{s.currentRoundIndex + 1}</span>
+        <strong style={{ fontSize: 18 }}>
+          GG <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
         </strong>
-        <span class="muted">{s.attendees.length}人 · {s.courtCount}コート</span>
+        <label style={{ fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+          <input
+            type="checkbox"
+            data-testid="round-name-toggle"
+            checked={showNames.value}
+            onInput={(e) => { showNames.value = (e.currentTarget as HTMLInputElement).checked; }}
+          />
+          名前
+        </label>
       </header>
 
       {round.courts.map((c) => (
@@ -73,11 +99,12 @@ export function RoundPage() {
           court={c}
           todayNumbers={todayNumbers}
           nameFor={nameFor}
+          showNames={showNames.value}
           onSetWinner={(w) => { void sessionStore.recordWinner(c.number, w); }}
         />
       ))}
 
-      {resterNumbers.length > 0 && (
+      {resterLabels.length > 0 && (
         <div
           class="card"
           data-testid="rester-bar"
@@ -86,48 +113,48 @@ export function RoundPage() {
             color: "var(--rest-fg)",
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            padding: "10px 16px",
-            marginBottom: 16,
+            gap: 8,
+            padding: "6px 12px",
+            marginBottom: 8,
           }}
         >
-          <strong>休憩</strong>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {resterNumbers.map((n) => (
+          <strong style={{ fontSize: 13 }}>休憩</strong>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {resterLabels.map((label, i) => (
               <span
-                key={n}
+                key={i}
                 style={{
                   fontWeight: 900,
-                  fontSize: 24,
+                  fontSize: showNames.value ? 14 : 18,
                   fontVariantNumeric: "tabular-nums" as const,
                 }}
               >
-                {n}
+                {label}
               </span>
             ))}
           </div>
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
           class="btn-primary"
           style={{ flex: 1 }}
           data-testid="prev-round-btn"
           disabled={s.currentRoundIndex === 0}
-          onClick={() => navigate("/session/history")}
+          onClick={() => sessionStore.goToPreviousRound()}
         >
-          <span class="a">←</span> 前のラウンド
+          <span class="a">←</span> 前
         </button>
         <button
           type="button"
           class="btn-primary"
-          style={{ flex: 2 }}
+          style={{ flex: 1 }}
           data-testid="next-round-btn"
           onClick={() => { void sessionStore.nextRound(); }}
         >
-          次のラウンド <span class="a">→</span>
+          次 <span class="a">→</span>
         </button>
       </div>
 
@@ -135,15 +162,12 @@ export function RoundPage() {
         type="button"
         data-testid="end-session-btn"
         onClick={async () => {
-          if (!confirm("今日のセッションを終了します。ペア履歴が保存されます。よろしいですか？")) return;
+          if (!confirm("セッションを終了してランキングに反映します。\n（間違えた場合は「過去のセッション」から削除できます）")) return;
           try {
             await sessionStore.endSession();
             navigate("/");
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            // Surface the error so the operator (and the developer) can see why
-            // end-session failed — otherwise the click silently no-ops and the
-            // session sticks in `ongoing` forever.
             alert(`セッション終了に失敗しました:\n${msg}`);
             console.error("endSession failed", e);
           }
@@ -151,13 +175,13 @@ export function RoundPage() {
         style={{
           display: "block",
           width: "100%",
-          marginTop: 16,
-          padding: "10px 12px",
+          marginTop: 8,
+          padding: "8px 12px",
           background: "transparent",
           border: "1.5px solid var(--line)",
           borderRadius: 8,
           color: "var(--muted)",
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 700,
           cursor: "pointer",
         }}

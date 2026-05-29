@@ -24,6 +24,22 @@ vi.mock("@/ui/stores", async () => {
       loadPast,
       loadById: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
+      deleteById: vi.fn(),
+    },
+    matchLogRepo: {
+      list: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockResolvedValue(undefined),
+      deleteBySession: vi.fn().mockResolvedValue(undefined),
+      deleteByRoundCourt: vi.fn().mockResolvedValue(undefined),
+    },
+    pinStore: {
+      isUnlocked: signal(false),
+      verifying: signal(false),
+      lastError: signal(null),
+      verify: vi.fn().mockResolvedValue(true),
+      getPin: vi.fn().mockReturnValue("1234"),
+      lock: vi.fn(),
     },
   };
 });

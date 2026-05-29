@@ -56,7 +56,8 @@ export interface SessionStore {
   session: Signal<InMemorySession | null>;
   startNewSession(input: StartNewSessionInput): Promise<void>;
   nextRound(): Promise<void>;
-  recordWinner(courtNumber: number, winner: "A" | "B"): Promise<void>;
+  goToPreviousRound(): void;
+  recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
 }
 
@@ -180,6 +181,16 @@ export function createSessionStore(deps: {
     const s = session.value;
     if (!s) throw new Error("No active session. Call startNewSession first.");
 
+    // If the user navigated back with goToPreviousRound, just step forward
+    // through the already-generated rounds instead of producing a new one —
+    // otherwise we'd skip rounds in the display and orphan stored ones.
+    if (s.currentRoundIndex < s.rounds.length - 1) {
+      s.currentRoundIndex += 1;
+      session.value = { ...s };
+      await sessionRepo.upsert(toSessionRow(session.value));
+      return;
+    }
+
     const refs = s.attendees.map(a => a.ref);
     const n = refs.length;
 
@@ -246,9 +257,22 @@ export function createSessionStore(deps: {
   }
 
   // ------------------------------------------------------------------
+  // goToPreviousRound — navigate back without discarding generated rounds.
+  // ------------------------------------------------------------------
+  function goToPreviousRound(): void {
+    const s = session.value;
+    if (!s) return;
+    if (s.currentRoundIndex <= 0) return;
+    s.currentRoundIndex -= 1;
+    session.value = { ...s };
+    // Fire-and-forget persist (cursor position only).
+    void sessionRepo.upsert(toSessionRow(session.value));
+  }
+
+  // ------------------------------------------------------------------
   // recordWinner
   // ------------------------------------------------------------------
-  async function recordWinner(courtNumber: number, winner: "A" | "B"): Promise<void> {
+  async function recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void> {
     const s = session.value;
     if (!s) throw new Error("No active session.");
 
@@ -258,25 +282,31 @@ export function createSessionStore(deps: {
     const court = round.courts.find(c => c.number === courtNumber);
     if (!court) throw new Error(`Court ${courtNumber} not found in current round.`);
 
-    // Mutate winner in place
-    court.winner = winner;
-
-    // Write match log only when both teams have at least one member ID
     const teamAIds = memberIdsFrom(court.teamA);
     const teamBIds = memberIdsFrom(court.teamB);
+    const bothSidesHaveMembers = teamAIds.length > 0 && teamBIds.length > 0;
 
-    if (teamAIds.length > 0 && teamBIds.length > 0) {
-      await matchLogRepo.add({
-        sessionId: s.id,
-        roundIndex: s.currentRoundIndex,
-        courtType: court.type,
-        teamA: teamAIds,
-        teamB: teamBIds,
-        winner,
-      });
+    if (winner === null) {
+      court.winner = "none";
+      if (bothSidesHaveMembers) {
+        await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, teamAIds);
+      }
+    } else {
+      court.winner = winner;
+      if (bothSidesHaveMembers) {
+        // Replace any prior log row for this court before inserting the new winner.
+        await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, teamAIds);
+        await matchLogRepo.add({
+          sessionId: s.id,
+          roundIndex: s.currentRoundIndex,
+          courtType: court.type,
+          teamA: teamAIds,
+          teamB: teamBIds,
+          winner,
+        });
+      }
     }
 
-    // Persist session
     session.value = { ...s };
     await sessionRepo.upsert(toSessionRow(session.value));
   }
@@ -321,5 +351,5 @@ export function createSessionStore(deps: {
     session.value = null;
   }
 
-  return { session, startNewSession, nextRound, recordWinner, endSession };
+  return { session, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession };
 }

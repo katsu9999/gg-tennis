@@ -23,6 +23,7 @@ function makeDeps() {
       update: vi.fn().mockImplementation(async (r: SessionRow) => {
         upsertedRows.push(r);
       }),
+      deleteById: vi.fn().mockResolvedValue(undefined),
     } satisfies SessionRepository,
     historyRepo: {
       loadPairHistory: vi.fn().mockResolvedValue(emptyHist()),
@@ -36,6 +37,7 @@ function makeDeps() {
         return m;
       }),
       deleteBySession: vi.fn().mockResolvedValue(undefined),
+      deleteByRoundCourt: vi.fn().mockResolvedValue(undefined),
     } satisfies MatchLogRepository,
   };
 }
@@ -180,6 +182,36 @@ describe("session store", () => {
     await store.recordWinner(1, "A");
 
     expect(deps.matchLogRepo.add).not.toHaveBeenCalled();
+  });
+
+  it("recordWinner(null) clears court.winner and deletes the match log row", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+
+    await store.recordWinner(1, "A");
+    expect(store.session.value!.rounds[0]!.courts[0]!.winner).toBe("A");
+    expect(deps.matchLogRepo.add).toHaveBeenCalledTimes(1);
+
+    await store.recordWinner(1, null);
+    expect(store.session.value!.rounds[0]!.courts[0]!.winner).toBe("none");
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalled();
+  });
+
+  it("recordWinner switching A→B replaces the match log row", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+
+    await store.recordWinner(1, "A");
+    await store.recordWinner(1, "B");
+
+    expect(store.session.value!.rounds[0]!.courts[0]!.winner).toBe("B");
+    expect(deps.matchLogRepo.add).toHaveBeenCalledTimes(2);
+    // Each set call deletes any prior row for this court before inserting.
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledTimes(2);
   });
 
   // Test 9: endSession sets status=past, persists, and clears session.value

@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
 import {
   rosterStore,
   sessionStore,
@@ -196,7 +196,7 @@ export function NewSessionPage() {
       <section class="card" style={{ marginBottom: 12 }}>
         <h3 style={{ marginTop: 0 }}>出席を選ぶ</h3>
         {rosterStore.active.value.length === 0 ? (
-          <p class="muted">名簿にアクティブ会員がいません。<a href="/roster">名簿を追加</a></p>
+          <p class="muted">名簿にアクティブ会員がいません。<a href={linkTo("/roster")}>名簿を追加</a></p>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
             {rosterStore.active.value.map((m) => {

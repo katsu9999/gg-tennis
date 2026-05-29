@@ -3,17 +3,17 @@ import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
 
 // Module-scoped UI state. Survives navigation within the session; reset
 // inside `useEffect` based on session/round counts.
 const cursor = signal(0);
-const showNames = signal(false);
+const showNames = signal(true);
 
 /** Test helper — resets module-scoped UI state. */
 export function resetHistoryState(): void {
   cursor.value = 0;
-  showNames.value = false;
+  showNames.value = true;
 }
 
 export function HistoryPage() {
@@ -27,7 +27,7 @@ export function HistoryPage() {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
         <h2>セッションが開始されていません</h2>
-        <p><a href="/">ホームへ</a></p>
+        <p><a href={linkTo("/")}>ホームへ</a></p>
       </main>
     );
   }
@@ -37,7 +37,7 @@ export function HistoryPage() {
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
         <h2>履歴なし</h2>
         <p>まだラウンドが生成されていません。</p>
-        <p><a href="/session/round">ラウンド画面へ</a></p>
+        <p><a href={linkTo("/session/round")}>ラウンド画面へ</a></p>
       </main>
     );
   }

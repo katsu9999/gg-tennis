@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { navigate } from "@/ui/router";
+import { navigate, linkTo } from "@/ui/router";
 import {
   plannedSessionStore,
   rsvpStore,
@@ -96,7 +96,7 @@ export function HomePage() {
         まだ将来セッションがありません。
       </p>
       <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-        <a href="/planned">→ 予定セッションを作成する</a>
+        <a href={linkTo("/planned")}>→ 予定セッションを作成する</a>
       </p>
     </>
   );

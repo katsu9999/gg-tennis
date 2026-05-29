@@ -36,6 +36,8 @@ export interface SessionRepository {
    * upsert, which is rejected by the v1.1 RLS policy when status='past'
    * (anon INSERT is restricted to status='ongoing'). */
   update(row: SessionRow): Promise<void>;
+  /** PIN-gated deletion via delete_session RPC (cascades match_log via FK). */
+  deleteById(id: string, pin: string): Promise<void>;
 }
 
 export function createSessionRepository(supabase: SupabaseClient): SessionRepository {
@@ -63,6 +65,13 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
     async update(row) {
       const { id, ...rest } = row;
       const { error } = await t().update(rest).eq("id", id);
+      if (error) throw error;
+    },
+    async deleteById(id, pin) {
+      const { error } = await supabase.rpc("delete_session", {
+        p_pin: pin,
+        p_session_id: id,
+      });
       if (error) throw error;
     },
   };

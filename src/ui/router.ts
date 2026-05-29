@@ -55,6 +55,12 @@ export function navigate(to: string): void {
   currentPath.value = to; // store the canonical (base-stripped) path
 }
 
+/** Build a base-aware href for `<a>` tags. Without this, `<a href="/">` jumps
+ *  out of the app on GitHub Pages (where BASE = "/gg-tennis"). */
+export function linkTo(to: string): string {
+  return BASE + (to.startsWith("/") ? to : "/" + to);
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
     currentPath.value = stripBase(location.pathname);
