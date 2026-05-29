@@ -47,15 +47,14 @@ describe("rankings (§6.5)", () => {
     expect([...a.elo.entries()].sort()).toEqual([...b.elo.entries()].sort());
   });
 
-  it("pair winrate requires minimum matches (default 3)", () => {
+  it("pair winrate requires minimum matches (default 2)", () => {
     const matches: MatchResult[] = [
       m([1, 2], [3, 4], "A", "2026-06-01"),
-      m([1, 2], [3, 4], "A", "2026-06-02"),
     ];
     const r = computeRankings(matches, [], {
       from: new Date("2026-01-01"), to: new Date("2027-01-01"),
     });
-    expect(r.pair.size).toBe(0); // only 2 matches, below threshold
+    expect(r.pair.size).toBe(0); // only 1 match, below threshold
   });
 
   it("attendance count tallies sessions", () => {

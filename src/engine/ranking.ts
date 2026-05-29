@@ -5,7 +5,7 @@ export const ELO_INITIAL = 1500;
 export const ELO_K = 24;
 export const ELO_K_PROVISIONAL = 40;
 export const PROVISIONAL_MATCHES = 10;
-export const PAIR_MIN_MATCHES = 3;
+export const PAIR_MIN_MATCHES = 2;
 
 export interface SeasonWindow {
   from: Date;
