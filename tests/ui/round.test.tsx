@@ -35,6 +35,7 @@ vi.mock("@/ui/stores", async () => {
       goToPreviousRound: vi.fn(),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
+      resume: vi.fn().mockResolvedValue(undefined),
     },
   };
 });

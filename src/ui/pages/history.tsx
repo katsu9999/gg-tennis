@@ -19,6 +19,7 @@ export function resetHistoryState(): void {
 export function HistoryPage() {
   useEffect(() => {
     if (rosterStore.all.value.length === 0) void rosterStore.load();
+    if (!sessionStore.session.value) void sessionStore.resume();
   }, []);
 
   const s = sessionStore.session.value;

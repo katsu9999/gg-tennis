@@ -1,7 +1,15 @@
 import { render } from "preact";
 import { computed } from "@preact/signals";
 import { currentPath, matchRoute } from "@/ui/router";
+import { sessionStore } from "@/ui/stores";
 import "@/ui/theme.css";
+
+// Re-hydrate any ongoing session from the DB on cold start. Without this,
+// reopening the PWA after a phone-lock / tab-close shows the home "ライブ中"
+// badge (because liveSessionStore queries the DB) but sessionStore is empty
+// — so visiting /session/round renders "セッションが開始されていません" and
+// the operator loses today's match.
+void sessionStore.resume();
 
 // Phase 4+ pages — added incrementally
 import { HomePage } from "@/ui/pages/home";
