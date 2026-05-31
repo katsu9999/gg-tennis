@@ -270,4 +270,139 @@ describe("session store", () => {
       expect(typeof u.opponentW).toBe("number");
     }
   });
+
+  // ----- resume from DB (phone-lock / PWA reload recovery) -----
+
+  it("resume is a no-op when sessionStore already has a session", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    const before = store.session.value;
+    await store.resume();
+    expect(store.session.value).toBe(before);
+    expect(deps.sessionRepo.loadOngoing).not.toHaveBeenCalled();
+  });
+
+  it("resume hydrates session from sessionRepo.loadOngoing when memory is empty", async () => {
+    const deps = makeDeps();
+    // Pre-populate the repo with an ongoing row that includes a round
+    const persistedRow = {
+      id: "sess-resume",
+      status: "ongoing" as const,
+      planned_session_id: null,
+      date: "2026-05-31",
+      location: "Hendon",
+      court_count: 2,
+      allow_singles: false,
+      attendees: [
+        { ref: { kind: "member", memberId: 1 }, todayNumber: 1, isGuest: false },
+        { ref: { kind: "member", memberId: 2 }, todayNumber: 2, isGuest: false },
+        { ref: { kind: "member", memberId: 3 }, todayNumber: 3, isGuest: false },
+        { ref: { kind: "member", memberId: 4 }, todayNumber: 4, isGuest: false },
+      ],
+      rounds: [
+        {
+          index: 0,
+          courts: [
+            {
+              number: 1,
+              type: "doubles",
+              teamA: [{ kind: "member", memberId: 1 }, { kind: "member", memberId: 2 }],
+              teamB: [{ kind: "member", memberId: 3 }, { kind: "member", memberId: 4 }],
+              winner: "A",
+            },
+          ],
+          resters: [],
+        },
+      ],
+      today_stats: {
+        '{"kind":"member","memberId":1}': { play: 1, rest: 0 },
+        '{"kind":"member","memberId":2}': { play: 1, rest: 0 },
+        '{"kind":"member","memberId":3}': { play: 1, rest: 0 },
+        '{"kind":"member","memberId":4}': { play: 1, rest: 0 },
+      },
+      next_today_number: 5,
+      current_round_index: 0,
+      created_at: "2026-05-31T08:00:00Z",
+      host_token: "tok-abc",
+      host_label: "Katsu",
+    };
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue(persistedRow);
+
+    const store = createSessionStore(deps);
+    expect(store.session.value).toBeNull();
+
+    await store.resume();
+
+    const s = store.session.value;
+    expect(s).not.toBeNull();
+    expect(s!.id).toBe("sess-resume");
+    expect(s!.location).toBe("Hendon");
+    expect(s!.rounds).toHaveLength(1);
+    expect(s!.rounds[0]!.courts[0]!.winner).toBe("A");
+    expect(s!.currentRoundIndex).toBe(0);
+    expect(s!.attendees).toHaveLength(4);
+    expect(s!.hostLabel).toBe("Katsu");
+    // today_stats was JSONB Record; should be rebuilt into a Map
+    expect(s!.todayStats.size).toBe(4);
+    // Pair history should be loaded so the next round-builder call has data
+    expect(deps.historyRepo.loadPairHistory).toHaveBeenCalled();
+  });
+
+  it("resume is a silent no-op when no ongoing session exists in DB", async () => {
+    const deps = makeDeps();
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue(null);
+    const store = createSessionStore(deps);
+    await store.resume();
+    expect(store.session.value).toBeNull();
+  });
+
+  it("resume → nextRound continues from currentRoundIndex+1, not from R1", async () => {
+    const deps = makeDeps();
+    // Persisted session sitting at R2 (index 1) of 2 rounds.
+    const round = (idx: number) => ({
+      index: idx,
+      courts: [
+        {
+          number: 1,
+          type: "doubles",
+          teamA: [{ kind: "member", memberId: 1 }, { kind: "member", memberId: 2 }],
+          teamB: [{ kind: "member", memberId: 3 }, { kind: "member", memberId: 4 }],
+          winner: "none",
+        },
+      ],
+      resters: [],
+    });
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue({
+      id: "sess-x",
+      status: "ongoing",
+      planned_session_id: null,
+      date: "2026-05-31",
+      location: "Hendon",
+      court_count: 1,
+      allow_singles: false,
+      attendees: [1, 2, 3, 4].map((id) => ({
+        ref: { kind: "member", memberId: id },
+        todayNumber: id,
+        isGuest: false,
+      })),
+      rounds: [round(0), round(1)],
+      today_stats: {},
+      next_today_number: 5,
+      current_round_index: 1,
+      created_at: "2026-05-31T08:00:00Z",
+      host_token: null,
+      host_label: null,
+    });
+
+    const store = createSessionStore(deps);
+    await store.resume();
+    expect(store.session.value!.currentRoundIndex).toBe(1);
+    expect(store.session.value!.rounds).toHaveLength(2);
+
+    await store.nextRound();
+    // Already at the latest persisted round → nextRound generates R3 (index 2)
+    expect(store.session.value!.rounds).toHaveLength(3);
+    expect(store.session.value!.currentRoundIndex).toBe(2);
+  });
 });
