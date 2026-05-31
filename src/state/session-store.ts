@@ -59,6 +59,9 @@ export interface SessionStore {
   goToPreviousRound(): void;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
+  /** Re-hydrate the in-memory session from the DB row (PWA reload / phone lock).
+   *  No-op if a session is already loaded. */
+  resume(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -356,5 +359,62 @@ export function createSessionStore(deps: {
     session.value = null;
   }
 
-  return { session, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession };
+  // ------------------------------------------------------------------
+  // resume — re-hydrate from DB after a reload (browser tab lifecycle,
+  // phone lock killing the PWA, etc). Without this, sessionStore.session
+  // stays null after reload even though `sessions` has an ongoing row,
+  // so /session/round shows "セッションが開始されていません" and the
+  // operator has no path back to today's match short of starting fresh.
+  // ------------------------------------------------------------------
+  async function resume(): Promise<void> {
+    if (session.value) return;
+    const row = await sessionRepo.loadOngoing();
+    if (!row) return;
+
+    // Reload pair history (next-round balancer needs it).
+    history = await historyRepo.loadPairHistory();
+    decayHistory(history);
+
+    // Reconstruct rounds + sameSession from the persisted JSONB.
+    const rounds = (row.rounds ?? []) as Round[];
+    sameSession = { partner: new Map(), opp: new Map() };
+    for (const r of rounds) {
+      applyRoundToSameSession(sameSession, r.courts);
+    }
+
+    // today_stats was serialised as a plain Record; rebuild the Map.
+    const todayStats = new Map<string, { play: number; rest: number }>();
+    for (const [key, val] of Object.entries(row.today_stats ?? {})) {
+      todayStats.set(key, val as { play: number; rest: number });
+    }
+
+    // prevResters comes from whatever round is current — used by the
+    // rester-selector so the same people don't sit out twice in a row.
+    const currentIdx = row.current_round_index;
+    const lastRound = currentIdx >= 0 ? rounds[currentIdx] : undefined;
+    const prevResters = lastRound?.resters ?? [];
+
+    const date = new Date(row.date);
+    const s: InMemorySession = {
+      id: row.id,
+      status: row.status,
+      plannedSessionId: row.planned_session_id,
+      date,
+      location: row.location,
+      courtCount: row.court_count,
+      allowSingles: row.allow_singles,
+      attendees: row.attendees as InMemorySession["attendees"],
+      rounds,
+      currentRoundIndex: currentIdx,
+      todayStats,
+      prevResters,
+      rngSeed: deriveRngSeed(date),
+      hostToken: row.host_token ?? null,
+      hostLabel: row.host_label ?? null,
+    };
+
+    session.value = s;
+  }
+
+  return { session, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, resume };
 }

@@ -16,6 +16,7 @@ vi.mock("@/ui/stores", async () => {
       nextRound: vi.fn(),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
+      resume: vi.fn().mockResolvedValue(undefined),
     },
     rosterStore: {
       all: allSignal,

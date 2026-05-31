@@ -20,6 +20,9 @@ export function setRoundShowNames(value: boolean): void {
 export function RoundPage() {
   useEffect(() => {
     if (rosterStore.all.value.length === 0) void rosterStore.load();
+    // Belt-and-braces: if main.tsx's startup resume hasn't landed yet (or
+    // was reset by hot reload), try again here. No-op if already loaded.
+    if (!sessionStore.session.value) void sessionStore.resume();
   }, []);
 
   const s = sessionStore.session.value;
