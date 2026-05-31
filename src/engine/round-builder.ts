@@ -3,11 +3,17 @@ import { memberIdsFrom, pairKey } from "./models";
 import type { Rng } from "./rng";
 import { shuffle } from "./rng";
 
-const W_PARTNER = 3;
-const W_OPP = 1;
-const SAME_SESSION = 8;
-const SAME_SESSION_OPP = 3;
-const K_ATTEMPTS = 300;
+// Tuned for the GG club's typical 2h night: 3 doubles courts, 8-12 players,
+// 5-6 rounds. With so few rounds, intra-session variety is the only thing
+// that actually matters — cross-session decay barely moves the needle in
+// 5 rounds. So we crank the same-session weights up so the search basically
+// refuses to repeat any partnership, and trim the cross-session weight so it
+// breaks ties rather than driving the choice.
+const W_PARTNER = 1;
+const W_OPP = 0.5;
+const SAME_SESSION = 30;
+const SAME_SESSION_OPP = 10;
+const K_ATTEMPTS = 800;
 
 function teamPairScore(team: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): number {
   const ids = memberIdsFrom(team);
