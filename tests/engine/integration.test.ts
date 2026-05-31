@@ -55,6 +55,51 @@ describe("engine integration (full session simulation)", () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
+  it("GG night (12 ppl, 3 doubles, 5 rounds) keeps partner repeats to a minimum", () => {
+    // Exact theoretical minimum: each player partners 5 different people across
+    // 5 rounds out of 11 possible, so 0 repeats is achievable. Real-world: a
+    // greedy search may settle for a couple of repeats. We assert it stays
+    // single-digit so a regression in the weights or attempt count is loud.
+    const attendees = Array.from({ length: 12 }, (_, i) => ref(i + 1));
+    const courts = 3;
+    const rng = mulberry32(7);
+
+    const hist: PairHistory = { partnerW: new Map(), opponentW: new Map() };
+    const ss = { partner: new Map<string, number>(), opp: new Map<string, number>() };
+    const playCount = new Map<string, number>();
+    const k = (r: AttendeeRef) => JSON.stringify(r);
+    let prevResters: AttendeeRef[] = [];
+
+    let partnerRepeatCount = 0; // total pair-events that revisited a prior pair
+
+    for (let round = 0; round < 5; round++) {
+      const plan = planRound(attendees.length, courts, false); // all doubles
+      const resters = selectResters(attendees, plan.resters, playCount, prevResters, rng);
+      const seated = attendees.filter(a => !resters.some(r => k(r) === k(a)));
+      const built = buildRound(seated, plan.doublesCourts, plan.singlesCourts, hist, ss, rng);
+
+      for (const c of built.courts) {
+        const teams = [c.teamA, c.teamB] as const;
+        for (const team of teams) {
+          const a = k(team[0]!);
+          const b = k(team[1]!);
+          const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+          if (ss.partner.has(key)) partnerRepeatCount += 1;
+        }
+        for (const r of [...c.teamA, ...c.teamB]) {
+          playCount.set(k(r), (playCount.get(k(r)) ?? 0) + 1);
+        }
+      }
+      applyRoundToHistory(hist, built.courts);
+      applyRoundToSameSession(ss, built.courts);
+      prevResters = resters;
+    }
+
+    // 5 rounds × 3 courts × 2 teams = 30 pair-events total. With perfect
+    // scheduling all 30 are unique. We expect the greedy search to stay close.
+    expect(partnerRepeatCount).toBeLessThan(5);
+  });
+
   it("computeRankings returns empty maps when no matches fall in the window", async () => {
     const { computeRankings } = await import("@/engine/ranking");
     const r = computeRankings([], [], {
