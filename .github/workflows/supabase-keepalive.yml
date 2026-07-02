@@ -1,0 +1,35 @@
+# Supabase free-tier projects are PAUSED after ~7 days without API activity —
+# the project's DNS record disappears and the app looks like all data vanished
+# (this actually happened on 2026-07-02 after a month without club sessions).
+# Paused projects are restorable from the dashboard for 90 days, then deleted.
+#
+# This workflow pings the REST API twice a week so the project always shows
+# recent activity. The URL and publishable key are the same public values
+# shipped in the app bundle — nothing secret here.
+name: Supabase keepalive
+
+on:
+  schedule:
+    # Mondays and Thursdays 09:00 UTC
+    - cron: "0 9 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          set -euo pipefail
+          # Public values — identical to what ships in the app bundle.
+          URL="https://stuwqwghbnimbiimrerx.supabase.co"
+          KEY="sb_publishable_TTSYuSGpnjMBh1pYknqaPQ_8ZRbc-Gt"
+          HTTP=$(curl -s -o /tmp/body -w "%{http_code}" \
+            "${URL}/rest/v1/settings?select=id&limit=1" \
+            -H "apikey: ${KEY}" -H "Authorization: Bearer ${KEY}")
+          echo "HTTP ${HTTP}"
+          cat /tmp/body
+          if [ "${HTTP}" != "200" ]; then
+            echo "::error::Supabase keepalive ping failed (HTTP ${HTTP}) — project may be paused. Restore it at https://supabase.com/dashboard"
+            exit 1
+          fi
