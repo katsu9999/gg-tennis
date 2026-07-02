@@ -35,6 +35,7 @@ vi.mock("@/ui/stores", async () => {
     },
     sessionStore: {
       session: signal(null),
+      generating: signal(false),
       startNewSession: vi.fn(),
       nextRound: hoisted.nextRoundMock,
       recordWinner: vi.fn(),
@@ -52,6 +53,7 @@ beforeEach(() => {
   hoisted.nextRoundMock.mockClear();
   hoisted.loadMock.mockClear();
   sessionStore.session.value = null;
+  sessionStore.generating.value = false;
   currentPath.value = "/session/number-map";
 });
 
@@ -134,5 +136,57 @@ describe("NumberMapPage", () => {
     fireEvent.click(getByText(/ラウンド開始/));
     await waitFor(() => expect(hoisted.nextRoundMock).toHaveBeenCalled());
     expect(currentPath.value).toBe("/session/round");
+  });
+
+  it("alerts and stays on the page when nextRound fails", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    hoisted.nextRoundMock.mockRejectedValueOnce(new Error("offline"));
+    sessionStore.session.value = {
+      id: "x",
+      status: "ongoing",
+      plannedSessionId: null,
+      date: new Date(),
+      location: "test",
+      courtCount: 3,
+      allowSingles: true,
+      attendees: [{ ref: { kind: "member", memberId: 1 }, todayNumber: 1, isGuest: false }],
+      rounds: [],
+      currentRoundIndex: -1,
+      todayStats: new Map(),
+      prevResters: [],
+      rngSeed: 0,
+      hostToken: null,
+      hostLabel: null,
+    };
+    const { getByText } = render(<NumberMapPage />);
+    fireEvent.click(getByText(/ラウンド開始/));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls[0]![0]).toMatch(/失敗/);
+    expect(currentPath.value).toBe("/session/number-map");
+    alertSpy.mockRestore();
+  });
+
+  it("disables the start button while a round is being generated", () => {
+    sessionStore.session.value = {
+      id: "x",
+      status: "ongoing",
+      plannedSessionId: null,
+      date: new Date(),
+      location: "test",
+      courtCount: 3,
+      allowSingles: true,
+      attendees: [{ ref: { kind: "member", memberId: 1 }, todayNumber: 1, isGuest: false }],
+      rounds: [],
+      currentRoundIndex: -1,
+      todayStats: new Map(),
+      prevResters: [],
+      rngSeed: 0,
+      hostToken: null,
+      hostLabel: null,
+    };
+    sessionStore.generating.value = true;
+    const { getByText } = render(<NumberMapPage />);
+    const btn = getByText(/ラウンド開始/).closest("button") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
   });
 });

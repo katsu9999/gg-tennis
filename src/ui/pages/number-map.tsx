@@ -28,9 +28,15 @@ export function NumberMapPage() {
     return "?";
   }
 
-  async function startFirstRound(): Promise<void> {
-    await sessionStore.nextRound();
-    navigate("/session/round");
+  function startFirstRound(): void {
+    sessionStore
+      .nextRound()
+      .then(() => navigate("/session/round"))
+      .catch((e) => {
+        console.error("startFirstRound failed", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        alert(`ラウンドの生成・保存に失敗しました:\n${msg}\n電波を確認してもう一度お試しください。`);
+      });
   }
 
   return (
@@ -67,7 +73,8 @@ export function NumberMapPage() {
           type="button"
           class="btn-primary"
           style={{ flex: 2 }}
-          onClick={() => { void startFirstRound(); }}
+          disabled={sessionStore.generating.value}
+          onClick={() => { startFirstRound(); }}
         >
           ラウンド開始 <span class="a">→</span>
         </button>

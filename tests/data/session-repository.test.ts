@@ -21,7 +21,7 @@ const sampleSession: SessionRow = {
 
 describe("SessionRepository", () => {
   it("loadOngoing returns the ongoing session", async () => {
-    const c = fakeClient({ sessions: { maybeSingle: sampleSession as unknown as Record<string, unknown> } });
+    const c = fakeClient({ sessions: { list: [sampleSession as unknown as Record<string, unknown>] } });
     const repo = createSessionRepository(c);
     const session = await repo.loadOngoing();
     expect(session).not.toBeNull();
@@ -30,10 +30,25 @@ describe("SessionRepository", () => {
   });
 
   it("loadOngoing returns null when no ongoing session exists", async () => {
-    const c = fakeClient({ sessions: { maybeSingle: null } });
+    const c = fakeClient({ sessions: { list: [] } });
     const repo = createSessionRepository(c);
     const session = await repo.loadOngoing();
     expect(session).toBeNull();
+  });
+
+  it("loadOngoing returns the newest row (no throw) when multiple ongoing sessions exist", async () => {
+    // Two ongoing rows can happen when a stale session is left un-ended and a
+    // new one is started. .maybeSingle() throws in that case, bricking both
+    // home and resume — loadOngoing must instead adopt the newest row.
+    const older = { ...sampleSession, id: "uuid-old", created_at: "2026-05-20T08:00:00Z" };
+    const newer = { ...sampleSession, id: "uuid-new", created_at: "2026-05-25T08:00:00Z" };
+    const c = fakeClient({
+      sessions: { list: [older, newer] as unknown as Record<string, unknown>[] },
+    });
+    const repo = createSessionRepository(c);
+    const session = await repo.loadOngoing();
+    expect(session).not.toBeNull();
+    expect(session!.id).toBe("uuid-new");
   });
 
   it("loadPast returns list of past sessions", async () => {

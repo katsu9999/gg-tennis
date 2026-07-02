@@ -7,6 +7,18 @@ import { navigate, linkTo } from "@/ui/router";
 
 const showNames = signal(false);
 
+function generateNextRound(): void {
+  sessionStore.nextRound().catch((e) => {
+    console.error("nextRound failed", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    alert(
+      `ラウンドの保存に失敗しました:\n${msg}\n` +
+        "画面のラウンドはまだサーバーに保存されていません。電波を確認してください。" +
+        "（次の操作（勝敗タップ等）が成功すれば自動的に保存されます）",
+    );
+  });
+}
+
 /** Test helper — resets module-scoped UI state. */
 export function resetRoundState(): void {
   showNames.value = false;
@@ -43,7 +55,11 @@ export function RoundPage() {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
         <h2>R{s.currentRoundIndex + 1} を準備中…</h2>
-        <button class="btn-primary" onClick={() => { void sessionStore.nextRound(); }}>
+        <button
+          class="btn-primary"
+          disabled={sessionStore.generating.value}
+          onClick={() => { generateNextRound(); }}
+        >
           生成する
         </button>
       </main>
@@ -163,7 +179,8 @@ export function RoundPage() {
           class="btn-primary"
           style={{ flex: 1 }}
           data-testid="next-round-btn"
-          onClick={() => { void sessionStore.nextRound(); }}
+          disabled={sessionStore.generating.value}
+          onClick={() => { generateNextRound(); }}
         >
           次 <span class="a">→</span>
         </button>

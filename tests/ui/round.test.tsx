@@ -30,6 +30,7 @@ vi.mock("@/ui/stores", async () => {
     },
     sessionStore: {
       session: signal(null),
+      generating: signal(false),
       startNewSession: vi.fn(),
       nextRound: vi.fn().mockResolvedValue(undefined),
       goToPreviousRound: vi.fn(),
@@ -97,6 +98,7 @@ beforeEach(async () => {
   vi.mocked(sessionStore.nextRound).mockClear();
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
   sessionStore.session.value = null;
+  sessionStore.generating.value = false;
   currentPath.value = "/session/round";
   const { resetRoundState } = await import("@/ui/pages/round");
   resetRoundState();
@@ -153,6 +155,24 @@ describe("RoundPage", () => {
     fireEvent.click(a);
     await waitFor(() => expect(sessionStore.recordWinner).toHaveBeenCalled());
     expect(sessionStore.recordWinner).toHaveBeenCalledWith(1, "A");
+  });
+
+  it("disables the next-round button while a round is being generated", () => {
+    sessionStore.session.value = makeSession(makeRound());
+    sessionStore.generating.value = true;
+    const { getByTestId } = render(<RoundPage />);
+    expect((getByTestId("next-round-btn") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("alerts when nextRound fails so the operator knows the round is unsaved", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    vi.mocked(sessionStore.nextRound).mockRejectedValueOnce(new Error("offline"));
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("next-round-btn"));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls[0]![0]).toMatch(/保存に失敗/);
+    alertSpy.mockRestore();
   });
 
   it("clicking next-round calls sessionStore.nextRound", async () => {

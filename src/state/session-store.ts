@@ -54,6 +54,9 @@ export interface StartNewSessionInput {
 
 export interface SessionStore {
   session: Signal<InMemorySession | null>;
+  /** True while nextRound() is in flight — used to disable buttons so a
+   *  double-tap can't generate two rounds back-to-back. */
+  generating: Signal<boolean>;
   startNewSession(input: StartNewSessionInput): Promise<void>;
   nextRound(): Promise<void>;
   goToPreviousRound(): void;
@@ -122,6 +125,7 @@ export function createSessionStore(deps: {
   const { sessionRepo, historyRepo, matchLogRepo } = deps;
 
   const session = signal<InMemorySession | null>(null);
+  const generating = signal(false);
 
   // Closure-scoped engine state — not serialised to DB (except history on endSession)
   let history: PairHistory = { partnerW: new Map(), opponentW: new Map() };
@@ -131,6 +135,15 @@ export function createSessionStore(deps: {
   // startNewSession
   // ------------------------------------------------------------------
   async function startNewSession(input: StartNewSessionInput): Promise<void> {
+    // 0. Refuse to create a second ongoing row — a stale un-ended session
+    // would make loadOngoing/home ambiguous and can shadow today's data.
+    const existing = await sessionRepo.loadOngoing();
+    if (existing) {
+      throw new Error(
+        "前回のセッションが未終了です。ホーム画面の「今すぐ終了」で終了してから開始してください。",
+      );
+    }
+
     // 1. Load and decay pair history
     const loaded = await historyRepo.loadPairHistory();
     history = loaded;
@@ -181,6 +194,18 @@ export function createSessionStore(deps: {
   // nextRound
   // ------------------------------------------------------------------
   async function nextRound(): Promise<void> {
+    // Re-entrancy guard: a double-tap on 次/ラウンド開始 must not generate two
+    // rounds (the second would skip on screen and corrupt rest rotation).
+    if (generating.value) return;
+    generating.value = true;
+    try {
+      await nextRoundInner();
+    } finally {
+      generating.value = false;
+    }
+  }
+
+  async function nextRoundInner(): Promise<void> {
     const s = session.value;
     if (!s) throw new Error("No active session. Call startNewSession first.");
 
@@ -375,11 +400,15 @@ export function createSessionStore(deps: {
     history = await historyRepo.loadPairHistory();
     decayHistory(history);
 
-    // Reconstruct rounds + sameSession from the persisted JSONB.
+    // Reconstruct rounds + sameSession from the persisted JSONB, and replay
+    // them into pair history too — history only reaches the DB at endSession,
+    // so rounds played before the reload exist nowhere else. Skipping this
+    // silently drops them from cross-session fairness weights.
     const rounds = (row.rounds ?? []) as Round[];
     sameSession = { partner: new Map(), opp: new Map() };
     for (const r of rounds) {
       applyRoundToSameSession(sameSession, r.courts);
+      applyRoundToHistory(history, r.courts);
     }
 
     // today_stats was serialised as a plain Record; rebuild the Map.
@@ -416,5 +445,5 @@ export function createSessionStore(deps: {
     session.value = s;
   }
 
-  return { session, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, resume };
+  return { session, generating, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, resume };
 }

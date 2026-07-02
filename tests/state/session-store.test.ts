@@ -277,10 +277,13 @@ describe("session store", () => {
     const deps = makeDeps();
     const store = createSessionStore(deps);
     await store.startNewSession(baseInput);
+    // startNewSession itself checks for a stale ongoing row; resume must not
+    // hit the repo again once a session is in memory.
+    const callsAfterStart = vi.mocked(deps.sessionRepo.loadOngoing).mock.calls.length;
     const before = store.session.value;
     await store.resume();
     expect(store.session.value).toBe(before);
-    expect(deps.sessionRepo.loadOngoing).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.sessionRepo.loadOngoing).mock.calls.length).toBe(callsAfterStart);
   });
 
   it("resume hydrates session from sessionRepo.loadOngoing when memory is empty", async () => {
@@ -354,6 +357,109 @@ describe("session store", () => {
     deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue(null);
     const store = createSessionStore(deps);
     await store.resume();
+    expect(store.session.value).toBeNull();
+  });
+
+  it("resume replays persisted rounds into pair history so endSession flushes them", async () => {
+    const deps = makeDeps();
+    // Ongoing row with one already-played round: 1&2 vs 3&4.
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue({
+      id: "sess-replay",
+      status: "ongoing",
+      planned_session_id: null,
+      date: "2026-05-31",
+      location: "Hendon",
+      court_count: 1,
+      allow_singles: false,
+      attendees: [1, 2, 3, 4].map((id) => ({
+        ref: { kind: "member", memberId: id },
+        todayNumber: id,
+        isGuest: false,
+      })),
+      rounds: [
+        {
+          index: 0,
+          courts: [
+            {
+              number: 1,
+              type: "doubles",
+              teamA: [{ kind: "member", memberId: 1 }, { kind: "member", memberId: 2 }],
+              teamB: [{ kind: "member", memberId: 3 }, { kind: "member", memberId: 4 }],
+              winner: "A",
+            },
+          ],
+          resters: [],
+        },
+      ],
+      today_stats: {},
+      next_today_number: 5,
+      current_round_index: 0,
+      created_at: "2026-05-31T08:00:00Z",
+      host_token: null,
+      host_label: null,
+    });
+
+    const store = createSessionStore(deps);
+    await store.resume();
+    await store.endSession();
+
+    // The pre-reload round MUST reach pair history at endSession, or
+    // cross-session fairness silently degrades after every phone-lock reload.
+    expect(deps.historyRepo.upsertPairWeights).toHaveBeenCalledTimes(1);
+    const updates = (deps.historyRepo.upsertPairWeights as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as { a: number; b: number; partnerW: number; opponentW: number }[];
+    const p12 = updates.find((u) => u.a === 1 && u.b === 2);
+    const p34 = updates.find((u) => u.a === 3 && u.b === 4);
+    const o13 = updates.find((u) => u.a === 1 && u.b === 3);
+    expect(p12?.partnerW ?? 0).toBeGreaterThan(0);
+    expect(p34?.partnerW ?? 0).toBeGreaterThan(0);
+    expect(o13?.opponentW ?? 0).toBeGreaterThan(0);
+  });
+
+  it("nextRound ignores a second call while the first is still in flight (double-tap)", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+
+    // Slow the persist so the second tap lands while the first is awaiting.
+    deps.sessionRepo.upsert = vi
+      .fn()
+      .mockImplementation(() => new Promise<void>((res) => setTimeout(res, 20)));
+
+    const p1 = store.nextRound();
+    expect(store.generating?.value).toBe(true);
+    const p2 = store.nextRound(); // double-tap — must be a no-op
+    await Promise.all([p1, p2]);
+
+    expect(store.session.value!.rounds).toHaveLength(1);
+    expect(store.session.value!.currentRoundIndex).toBe(0);
+    expect(store.generating?.value).toBe(false);
+  });
+
+  it("startNewSession rejects when an ongoing session already exists in DB", async () => {
+    const deps = makeDeps();
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue({
+      id: "sess-stale",
+      status: "ongoing",
+      planned_session_id: null,
+      date: "2026-05-30",
+      location: "Hendon",
+      court_count: 2,
+      allow_singles: false,
+      attendees: [],
+      rounds: [],
+      today_stats: {},
+      next_today_number: 1,
+      current_round_index: -1,
+      created_at: "2026-05-30T08:00:00Z",
+      host_token: null,
+      host_label: null,
+    });
+
+    const store = createSessionStore(deps);
+    await expect(store.startNewSession(baseInput)).rejects.toThrow(/未終了/);
+    // Must not create a second ongoing row.
+    expect(deps.sessionRepo.upsert).not.toHaveBeenCalled();
     expect(store.session.value).toBeNull();
   });
 
