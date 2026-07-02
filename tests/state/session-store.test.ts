@@ -38,6 +38,7 @@ function makeDeps() {
       }),
       deleteBySession: vi.fn().mockResolvedValue(undefined),
       deleteByRoundCourt: vi.fn().mockResolvedValue(undefined),
+      editPastCourtWinner: vi.fn().mockResolvedValue(undefined),
     } satisfies MatchLogRepository,
   };
 }

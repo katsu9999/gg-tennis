@@ -1,6 +1,6 @@
 import type { MatchResult, Member } from "@/engine/models";
 import type { SessionAttendance } from "@/engine/ranking";
-import type { RsvpRow } from "./rsvp-repository";
+import type { RsvpPublicRow } from "./rsvp-repository";
 import { supabase } from "./supabase-client";
 
 /**
@@ -22,7 +22,7 @@ export interface MemberExport {
   }[];
   rsvps: {
     plannedSessionId: string;
-    status: RsvpRow["status"];
+    status: RsvpPublicRow["status"];
     note: string | null;
     updatedAt: string;
   }[];
@@ -39,7 +39,7 @@ export function buildMemberExport(input: {
   /** All matches (caller fetches; we filter to ones involving the member). */
   matches: MatchResult[];
   /** All RSVPs for this member (caller pre-filtered). */
-  rsvps: RsvpRow[];
+  rsvps: RsvpPublicRow[];
 }): MemberExport {
   const { member, sessions, matches, rsvps } = input;
 
@@ -93,7 +93,12 @@ export async function exportMemberData(memberId: number): Promise<void> {
     supabase.from("members").select("*").eq("id", memberId).single(),
     supabase.from("sessions").select("id,date,location,attendees").eq("status", "past"),
     supabase.from("match_log").select("*"),
-    supabase.from("rsvps").select("*").eq("member_id", memberId),
+    // self_token is not anon-readable (migration 0008) — select("*") would
+    // fail with permission-denied, and the token has no place in an export.
+    supabase
+      .from("rsvps")
+      .select("planned_session_id, member_id, status, note, updated_at, updated_by")
+      .eq("member_id", memberId),
   ]);
 
   if (memberRes.error) throw memberRes.error;
@@ -155,7 +160,7 @@ export async function exportMemberData(memberId: number): Promise<void> {
     member,
     sessions,
     matches,
-    rsvps: (rsvpsRes.data ?? []) as RsvpRow[],
+    rsvps: (rsvpsRes.data ?? []) as RsvpPublicRow[],
   });
 
   // Trigger JSON download via Blob — browser-only.

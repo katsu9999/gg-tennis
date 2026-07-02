@@ -12,16 +12,23 @@ export interface RsvpRow {
   self_token: string | null;
 }
 
+/** What anon reads can see — self_token is excluded by column-level grants
+ *  (migration 0008), so it never leaves the DB on the public read path. */
+export type RsvpPublicRow = Omit<RsvpRow, "self_token">;
+
+/** Columns readable by anon. Selecting "*" would fail with permission-denied
+ *  because the self_token column grant was revoked in migration 0008. */
+const PUBLIC_COLUMNS = "planned_session_id, member_id, status, note, updated_at, updated_by";
+
 export interface RsvpRepository {
-  listForSession(plannedSessionId: string): Promise<RsvpRow[]>;
-  adminUpsert(row: Omit<RsvpRow, "updated_at" | "updated_by">): Promise<void>;
+  listForSession(plannedSessionId: string): Promise<RsvpPublicRow[]>;
+  /** Admin entry path — PIN-gated RPC (direct anon writes are blocked by RLS). */
+  adminUpsert(row: Omit<RsvpRow, "updated_at" | "updated_by">, pin: string): Promise<void>;
   /**
-   * Public-link path. The caller MUST include the LocalStorage self_token in
-   * the row. The DB-level RLS + trigger combination then ensures:
-   *  - the row carries `updated_by = 'self_public_link'`
-   *  - any existing row's self_token cannot be rotated
-   * The app layer SHOULD additionally constrain UPDATE with `.eq('self_token', selfToken)`
-   * so a mismatching token returns zero rows. See `supabase/migrations/0003_rls.sql`.
+   * Public-link path. Goes through the `upsert_rsvp_with_token` SECURITY
+   * DEFINER RPC, which verifies the caller's LocalStorage token against the
+   * stored row server-side — a mismatching token raises `rsvp_token_mismatch`
+   * instead of silently flipping another member's RSVP.
    */
   publicUpsertWithToken(row: Omit<RsvpRow, "updated_at" | "updated_by">): Promise<void>;
 }
@@ -30,27 +37,31 @@ export function createRsvpRepository(supabase: SupabaseClient): RsvpRepository {
   const t = () => supabase.from("rsvps");
   return {
     async listForSession(plannedSessionId) {
-      const { data, error } = await t().select("*").eq("planned_session_id", plannedSessionId);
+      const { data, error } = await t()
+        .select(PUBLIC_COLUMNS)
+        .eq("planned_session_id", plannedSessionId);
       if (error) throw error;
-      return (data ?? []) as RsvpRow[];
+      return (data ?? []) as RsvpPublicRow[];
     },
-    async adminUpsert(row) {
-      const payload = {
-        ...row,
-        updated_at: new Date().toISOString(),
-        updated_by: "admin" as const,
-      };
-      const { error } = await t().upsert(payload);
+    async adminUpsert(row, pin) {
+      const { error } = await supabase.rpc("admin_upsert_rsvp", {
+        p_pin: pin,
+        p_planned_session_id: row.planned_session_id,
+        p_member_id: row.member_id,
+        p_status: row.status,
+        p_note: row.note,
+      });
       if (error) throw error;
     },
     async publicUpsertWithToken(row) {
       if (!row.self_token) throw new Error("publicUpsertWithToken requires a self_token");
-      const payload = {
-        ...row,
-        updated_at: new Date().toISOString(),
-        updated_by: "self_public_link" as const,
-      };
-      const { error } = await t().upsert(payload);
+      const { error } = await supabase.rpc("upsert_rsvp_with_token", {
+        p_planned_session_id: row.planned_session_id,
+        p_member_id: row.member_id,
+        p_status: row.status,
+        p_note: row.note,
+        p_token: row.self_token,
+      });
       if (error) throw error;
     },
   };

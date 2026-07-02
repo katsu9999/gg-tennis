@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fakeClient } from "./test-helpers";
 import { createMatchLogRepository } from "@/data/match-log-repository";
 
@@ -13,6 +13,71 @@ const sampleRow = {
 };
 
 describe("MatchLogRepository", () => {
+  it("editPastCourtWinner calls the PIN-gated edit_past_court_winner RPC", async () => {
+    // Past sessions are frozen for direct anon writes (RLS) — edits must go
+    // through the SECURITY DEFINER RPC that verifies the club PIN.
+    const c = fakeClient({}, { edit_past_court_winner: { data: null } });
+    const repo = createMatchLogRepository(c);
+    const rounds = [{ index: 0, courts: [], resters: [] }];
+    await repo.editPastCourtWinner({
+      pin: "test-pin",
+      sessionId: "sess-9",
+      roundIndex: 2,
+      teamA: [1, 2],
+      teamB: [3, 4],
+      courtType: "doubles",
+      winner: "B",
+      rounds,
+    });
+
+    expect(c.rpc).toHaveBeenCalledWith("edit_past_court_winner", {
+      p_pin: "test-pin",
+      p_session_id: "sess-9",
+      p_round_index: 2,
+      p_team_a: [1, 2],
+      p_team_b: [3, 4],
+      p_court_type: "doubles",
+      p_winner: "B",
+      p_rounds: rounds,
+    });
+  });
+
+  it("editPastCourtWinner passes null winner to clear a result", async () => {
+    const c = fakeClient({}, { edit_past_court_winner: { data: null } });
+    const repo = createMatchLogRepository(c);
+    await repo.editPastCourtWinner({
+      pin: "test-pin",
+      sessionId: "sess-9",
+      roundIndex: 0,
+      teamA: [1, 2],
+      teamB: [3, 4],
+      courtType: "doubles",
+      winner: null,
+      rounds: [],
+    });
+    const args = (c.rpc as ReturnType<typeof vi.fn>).mock.calls[0]![1] as {
+      p_winner: string | null;
+    };
+    expect(args.p_winner).toBeNull();
+  });
+
+  it("editPastCourtWinner surfaces RPC errors", async () => {
+    const c = fakeClient({}, { edit_past_court_winner: { error: { message: "invalid_pin" } } });
+    const repo = createMatchLogRepository(c);
+    await expect(
+      repo.editPastCourtWinner({
+        pin: "wrong",
+        sessionId: "sess-9",
+        roundIndex: 0,
+        teamA: [1, 2],
+        teamB: [3, 4],
+        courtType: "doubles",
+        winner: "A",
+        rounds: [],
+      }),
+    ).rejects.toMatchObject({ message: "invalid_pin" });
+  });
+
   it("list returns MatchResult objects with at as Date", async () => {
     const c = fakeClient({ match_log: { list: [sampleRow] } });
     const repo = createMatchLogRepository(c);

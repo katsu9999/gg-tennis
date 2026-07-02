@@ -1,8 +1,8 @@
-import type { RsvpRow } from "@/data/rsvp-repository";
+import type { RsvpPublicRow } from "@/data/rsvp-repository";
 import type { Member } from "@/engine/models";
 
 interface Props {
-  rsvps: RsvpRow[];
+  rsvps: RsvpPublicRow[];
   activeMembers: Member[];
   /** When set, "going" names are joined with comma; otherwise wrapped in pill chips. */
   layout?: "chips" | "lines";
@@ -10,7 +10,7 @@ interface Props {
 
 export function RsvpSummary({ rsvps, activeMembers, layout = "lines" }: Props) {
   const byMemberId = new Map(activeMembers.map((m) => [m.id, m] as const));
-  const byStatus = (s: RsvpRow["status"]) =>
+  const byStatus = (s: RsvpPublicRow["status"]) =>
     rsvps
       .filter((r) => r.status === s)
       .map((r) => byMemberId.get(r.member_id)?.name ?? `#${r.member_id}`);

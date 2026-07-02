@@ -84,7 +84,7 @@ async function setRsvp(plannedSessionId: string, memberId: number, status: RsvpS
       status,
       note: null,
       self_token: null,
-    });
+    }, requirePin());
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {

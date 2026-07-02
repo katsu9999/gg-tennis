@@ -152,6 +152,8 @@ describe("PlannedSessionsPage", () => {
     expect(call.planned_session_id).toBe("p1");
     expect(call.member_id).toBe(1);
     expect(call.status).toBe("going");
+    // Admin RSVP entry is a PIN-gated RPC — the PIN must be passed through.
+    expect(rs.adminUpsert.mock.calls[0]![1]).toBe("test-pin");
   });
 
   it("copy-link button rotates and copies a fresh token when none exists, passing PIN", async () => {
