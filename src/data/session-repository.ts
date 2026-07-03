@@ -44,9 +44,15 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
   const t = () => supabase.from("sessions");
   return {
     async loadOngoing() {
-      const { data, error } = await t().select("*").eq("status", "ongoing").maybeSingle();
+      // Multiple ongoing rows can exist when a stale session is left un-ended
+      // and a new one starts. .maybeSingle() throws on >1 rows, which bricks
+      // both home and resume — adopt the most recently written row instead.
+      const { data, error } = await t().select("*").eq("status", "ongoing");
       if (error) throw error;
-      return (data as SessionRow | null) ?? null;
+      const rows = (data ?? []) as SessionRow[];
+      if (rows.length === 0) return null;
+      rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+      return rows[0]!;
     },
     async loadPast() {
       const { data, error } = await t().select("*").eq("status", "past").order("date");
