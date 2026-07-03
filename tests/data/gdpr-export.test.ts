@@ -95,8 +95,8 @@ describe("buildMemberExport (GDPR §17.4)", () => {
       sessions: [],
       matches: [],
       rsvps: [
-        { planned_session_id: "p1", member_id: 1, status: "going", note: null, updated_at: "2026-06-01T00:00:00Z", updated_by: "self_public_link", self_token: "x" },
-        { planned_session_id: "p1", member_id: 2, status: "not_going", note: null, updated_at: "2026-06-01T00:00:00Z", updated_by: "admin", self_token: null },
+        { planned_session_id: "p1", member_id: 1, status: "going", note: null, updated_at: "2026-06-01T00:00:00Z", updated_by: "self_public_link" },
+        { planned_session_id: "p1", member_id: 2, status: "not_going", note: null, updated_at: "2026-06-01T00:00:00Z", updated_by: "admin" },
       ],
     });
     expect(result.rsvps).toHaveLength(1);

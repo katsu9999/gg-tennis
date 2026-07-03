@@ -3,14 +3,14 @@ import { useEffect } from "preact/hooks";
 import { plannedSessionRepo, rsvpRepo, memberRepo } from "@/ui/stores";
 import { linkTo } from "@/ui/router";
 import type { PlannedSessionRow } from "@/data/planned-session-repository";
-import type { RsvpRow, RsvpStatus } from "@/data/rsvp-repository";
+import type { RsvpPublicRow, RsvpStatus } from "@/data/rsvp-repository";
 import type { Member } from "@/engine/models";
 
 const loading = signal(true);
 const notFound = signal(false);
 const session = signal<PlannedSessionRow | null>(null);
 const activeMembers = signal<Member[]>([]);
-const rsvps = signal<RsvpRow[]>([]);
+const rsvps = signal<RsvpPublicRow[]>([]);
 const selectedMemberId = signal<number | "">("");
 const note = signal("");
 const submitting = signal(false);

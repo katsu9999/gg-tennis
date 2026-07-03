@@ -50,6 +50,7 @@ function makeRepos(
       list: vi.fn().mockResolvedValue(matches),
       add: vi.fn(),
       deleteBySession: vi.fn(),
+      editPastCourtWinner: vi.fn(),
       deleteByRoundCourt: vi.fn(),
     },
     sessionRepo: {

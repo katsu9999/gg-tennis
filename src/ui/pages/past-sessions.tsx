@@ -73,12 +73,17 @@ function roundsOf(s: SessionRow): PastRound[] {
 /**
  * Update a court winner in a past session — mutates the JSONB rounds blob and
  * adjusts match_log so rankings stay consistent.
+ *
+ * Past sessions are frozen for direct anon writes (RLS, migration 0008), so
+ * this goes through the PIN-gated edit_past_court_winner RPC, which replaces
+ * the match_log row and stores the updated rounds JSONB atomically.
  */
 async function updatePastCourtWinner(
   session: SessionRow,
   roundIndex: number,
   courtNumber: number,
   newWinner: "A" | "B" | null,
+  pin: string,
 ): Promise<SessionRow> {
   const rounds = roundsOf(session).map((r) => ({
     ...r,
@@ -93,29 +98,21 @@ async function updatePastCourtWinner(
   const teamBIds = memberIdsFrom(court.teamB);
   const bothSidesHaveMembers = teamAIds.length > 0 && teamBIds.length > 0;
 
-  if (newWinner === null) {
-    court.winner = "none";
-    if (bothSidesHaveMembers) {
-      await matchLogRepo.deleteByRoundCourt(session.id, roundIndex, teamAIds);
-    }
-  } else {
-    court.winner = newWinner;
-    if (bothSidesHaveMembers) {
-      await matchLogRepo.deleteByRoundCourt(session.id, roundIndex, teamAIds);
-      await matchLogRepo.add({
-        sessionId: session.id,
-        roundIndex,
-        courtType: court.type,
-        teamA: teamAIds,
-        teamB: teamBIds,
-        winner: newWinner,
-      });
-    }
-  }
+  court.winner = newWinner === null ? "none" : newWinner;
 
-  const updated: SessionRow = { ...session, rounds };
-  await sessionRepo.update(updated);
-  return updated;
+  await matchLogRepo.editPastCourtWinner({
+    pin,
+    sessionId: session.id,
+    roundIndex,
+    teamA: teamAIds,
+    teamB: teamBIds,
+    courtType: court.type,
+    // Guest-only courts never had a match_log row — only update the JSONB.
+    winner: bothSidesHaveMembers ? newWinner : null,
+    rounds,
+  });
+
+  return { ...session, rounds };
 }
 
 function SessionDetail({ session }: { session: SessionRow }) {
@@ -133,17 +130,24 @@ function SessionDetail({ session }: { session: SessionRow }) {
     return null;
   };
 
-  async function handleSetWinner(roundIndex: number, courtNumber: number, w: "A" | "B" | null) {
-    try {
-      const updated = await updatePastCourtWinner(session, roundIndex, courtNumber, w);
-      selected.value = updated;
-      list.value = list.value.map((s) => (s.id === updated.id ? updated : s));
-      // Refresh ranking so deleted/edited results are reflected immediately.
-      void rankingStore.load();
-    } catch (e) {
-      console.error("update past winner failed", e);
-      alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
-    }
+  function handleSetWinner(roundIndex: number, courtNumber: number, w: "A" | "B" | null) {
+    gate(async () => {
+      const pin = pinStore.getPin();
+      if (!pin) {
+        alert("PIN が取得できませんでした");
+        return;
+      }
+      try {
+        const updated = await updatePastCourtWinner(session, roundIndex, courtNumber, w, pin);
+        selected.value = updated;
+        list.value = list.value.map((s) => (s.id === updated.id ? updated : s));
+        // Refresh ranking so deleted/edited results are reflected immediately.
+        void rankingStore.load();
+      } catch (e) {
+        console.error("update past winner failed", e);
+        alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
+      }
+    });
   }
 
   function handleDelete() {

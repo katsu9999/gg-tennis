@@ -32,23 +32,28 @@ vi.mock("@/ui/stores", async () => {
       add: vi.fn().mockResolvedValue(undefined),
       deleteBySession: vi.fn().mockResolvedValue(undefined),
       deleteByRoundCourt: vi.fn().mockResolvedValue(undefined),
+      editPastCourtWinner: vi.fn().mockResolvedValue(undefined),
     },
     pinStore: {
-      isUnlocked: signal(false),
+      isUnlocked: signal(true),
       verifying: signal(false),
       lastError: signal(null),
       verify: vi.fn().mockResolvedValue(true),
       getPin: vi.fn().mockReturnValue("1234"),
       lock: vi.fn(),
     },
+    rankingStore: {
+      load: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { PastSessionsPage, resetPastSessionsState } from "@/ui/pages/past-sessions";
-import { sessionRepo } from "@/ui/stores";
+import { sessionRepo, matchLogRepo } from "@/ui/stores";
 
 const sr = sessionRepo as unknown as { loadPast: ReturnType<typeof vi.fn> };
+const ml = matchLogRepo as unknown as { editPastCourtWinner: ReturnType<typeof vi.fn> };
 
 const sampleSession = {
   id: "s1",
@@ -69,11 +74,8 @@ const sampleSession = {
         {
           number: 1,
           type: "doubles" as const,
-          teamA: [
-            { kind: "member", memberId: 1 },
-            { kind: "member", memberId: 2 },
-          ],
-          teamB: [],
+          teamA: [{ kind: "member", memberId: 1 }],
+          teamB: [{ kind: "member", memberId: 2 }],
           winner: "A" as const,
         },
       ],
@@ -126,5 +128,31 @@ describe("PastSessionsPage", () => {
     fireEvent.click(getByTestId("past-back"));
     await waitFor(() => expect(queryByTestId("past-round-0")).toBeNull());
     expect(getByTestId("past-s1")).toBeDefined();
+  });
+
+  it("editing a past winner goes through the PIN-gated editPastCourtWinner RPC", async () => {
+    ml.editPastCourtWinner.mockClear();
+    sr.loadPast.mockResolvedValue([sampleSession]);
+    const { findByTestId, getByTestId } = render(<PastSessionsPage />);
+    fireEvent.click(await findByTestId("past-s1"));
+
+    // Tap team B — winner was "A", so this sets "B".
+    fireEvent.click(getByTestId("team-b"));
+
+    await waitFor(() => expect(ml.editPastCourtWinner).toHaveBeenCalled());
+    const args = ml.editPastCourtWinner.mock.calls[0]![0] as {
+      pin: string;
+      sessionId: string;
+      roundIndex: number;
+      winner: string | null;
+      teamA: number[];
+      teamB: number[];
+    };
+    expect(args.pin).toBe("1234");
+    expect(args.sessionId).toBe("s1");
+    expect(args.roundIndex).toBe(0);
+    expect(args.winner).toBe("B");
+    expect(args.teamA).toEqual([1]);
+    expect(args.teamB).toEqual([2]);
   });
 });

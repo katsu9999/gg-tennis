@@ -6,6 +6,20 @@ export interface MatchLogRepository {
   add(match: Omit<MatchResult, "at"> & { at?: Date }): Promise<MatchResult>;
   deleteBySession(sessionId: string): Promise<void>;
   deleteByRoundCourt(sessionId: string, roundIndex: number, teamA: number[]): Promise<void>;
+  /** Edit a court result on a PAST session. Direct anon writes to past
+   *  sessions are blocked by RLS — this goes through the PIN-gated
+   *  edit_past_court_winner RPC, which atomically replaces the match_log row
+   *  and stores the updated rounds JSONB on the sessions row. */
+  editPastCourtWinner(args: {
+    pin: string;
+    sessionId: string;
+    roundIndex: number;
+    teamA: number[];
+    teamB: number[];
+    courtType: MatchResult["courtType"];
+    winner: "A" | "B" | null;
+    rounds: unknown[];
+  }): Promise<void>;
 }
 
 interface MatchLogRow {
@@ -50,6 +64,19 @@ export function createMatchLogRepository(supabase: SupabaseClient): MatchLogRepo
     },
     async deleteBySession(sessionId) {
       const { error } = await t().delete().eq("session_id", sessionId);
+      if (error) throw error;
+    },
+    async editPastCourtWinner(args) {
+      const { error } = await supabase.rpc("edit_past_court_winner", {
+        p_pin: args.pin,
+        p_session_id: args.sessionId,
+        p_round_index: args.roundIndex,
+        p_team_a: args.teamA,
+        p_team_b: args.teamB,
+        p_court_type: args.courtType,
+        p_winner: args.winner,
+        p_rounds: args.rounds,
+      });
       if (error) throw error;
     },
     async deleteByRoundCourt(sessionId, roundIndex, teamA) {

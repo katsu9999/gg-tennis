@@ -80,14 +80,22 @@ describe("rsvp store", () => {
     // Switch the mock to return 2 rows after the upsert
     (repo.listForSession as ReturnType<typeof vi.fn>).mockResolvedValue(afterUpsert);
 
-    await store.adminUpsert({
-      planned_session_id: "ps-1",
-      member_id: 2,
-      status: "not_going",
-      note: null,
-      self_token: null,
-    });
+    await store.adminUpsert(
+      {
+        planned_session_id: "ps-1",
+        member_id: 2,
+        status: "not_going",
+        note: null,
+        self_token: null,
+      },
+      "test-pin",
+    );
 
+    // The PIN must reach the repo — admin RSVP entry is a PIN-gated RPC now.
+    expect(repo.adminUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ member_id: 2 }),
+      "test-pin",
+    );
     expect(store.bySession.value.get("ps-1")).toHaveLength(2);
   });
 });

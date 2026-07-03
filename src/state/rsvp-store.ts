@@ -1,11 +1,12 @@
 import { signal, type Signal } from "@preact/signals";
-import type { RsvpRepository, RsvpRow } from "@/data/rsvp-repository";
+import type { RsvpRepository, RsvpRow, RsvpPublicRow } from "@/data/rsvp-repository";
 
 export interface RsvpStore {
   /** rows keyed by plannedSessionId */
-  bySession: Signal<Map<string, RsvpRow[]>>;
-  loadForSession(plannedSessionId: string): Promise<RsvpRow[]>;
-  adminUpsert(row: Omit<RsvpRow, "updated_at" | "updated_by">): Promise<void>;
+  bySession: Signal<Map<string, RsvpPublicRow[]>>;
+  loadForSession(plannedSessionId: string): Promise<RsvpPublicRow[]>;
+  /** Admin entry — PIN-gated RPC path. */
+  adminUpsert(row: Omit<RsvpRow, "updated_at" | "updated_by">, pin: string): Promise<void>;
   publicUpsertWithToken(row: Omit<RsvpRow, "updated_at" | "updated_by">): Promise<void>;
   /** Convenience: count by status for a session */
   countsFor(plannedSessionId: string): { going: number; not_going: number; maybe: number };
@@ -14,15 +15,15 @@ export interface RsvpStore {
 }
 
 export function createRsvpStore(repo: RsvpRepository): RsvpStore {
-  const bySession = signal(new Map<string, RsvpRow[]>());
+  const bySession = signal(new Map<string, RsvpPublicRow[]>());
 
-  function replace(plannedSessionId: string, rows: RsvpRow[]): void {
+  function replace(plannedSessionId: string, rows: RsvpPublicRow[]): void {
     const next = new Map(bySession.value);
     next.set(plannedSessionId, rows);
     bySession.value = next;
   }
 
-  async function loadForSession(plannedSessionId: string): Promise<RsvpRow[]> {
+  async function loadForSession(plannedSessionId: string): Promise<RsvpPublicRow[]> {
     const rows = await repo.listForSession(plannedSessionId);
     replace(plannedSessionId, rows);
     return rows;
@@ -31,8 +32,8 @@ export function createRsvpStore(repo: RsvpRepository): RsvpStore {
   return {
     bySession,
     loadForSession,
-    async adminUpsert(row) {
-      await repo.adminUpsert(row);
+    async adminUpsert(row, pin) {
+      await repo.adminUpsert(row, pin);
       await loadForSession(row.planned_session_id);
     },
     async publicUpsertWithToken(row) {
