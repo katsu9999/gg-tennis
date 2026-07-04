@@ -76,6 +76,7 @@ vi.mock("@/ui/stores", async () => {
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { PlannedSessionsPage, resetPlannedSessionsState } from "@/ui/pages/planned-sessions";
 import { plannedSessionStore, rsvpStore, pinStore } from "@/ui/stores";
+import { appDialog } from "@/ui/components/app-dialog";
 
 const ps = plannedSessionStore as unknown as {
   list: { value: { id: string; date: string; location: string; public_rsvp_token: string | null }[] };
@@ -170,11 +171,10 @@ describe("PlannedSessionsPage", () => {
     ps.list.value = [
       { id: "p1", date: "2026-06-01", location: "Golders", public_rsvp_token: null },
     ];
-    // Stub window.confirm
-    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
     const { getByTestId } = render(<PlannedSessionsPage />);
     fireEvent.click(getByTestId("planned-delete-p1"));
     await waitFor(() => expect(ps.delete).toHaveBeenCalledWith("p1", "test-pin"));
-    vi.unstubAllGlobals();
+    confirmSpy.mockRestore();
   });
 });

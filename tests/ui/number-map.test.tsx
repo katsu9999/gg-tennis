@@ -48,6 +48,7 @@ import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { NumberMapPage } from "@/ui/pages/number-map";
 import { currentPath } from "@/ui/router";
 import { sessionStore } from "@/ui/stores";
+import { appDialog } from "@/ui/components/app-dialog";
 
 beforeEach(() => {
   hoisted.nextRoundMock.mockClear();
@@ -139,7 +140,7 @@ describe("NumberMapPage", () => {
   });
 
   it("alerts and stays on the page when nextRound fails", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    const alertSpy = vi.spyOn(appDialog, "alert").mockResolvedValue(undefined);
     hoisted.nextRoundMock.mockRejectedValueOnce(new Error("offline"));
     sessionStore.session.value = {
       id: "x",

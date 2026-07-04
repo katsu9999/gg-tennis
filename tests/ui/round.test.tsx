@@ -45,6 +45,7 @@ import { render, fireEvent, waitFor } from "@testing-library/preact";
 import { RoundPage } from "@/ui/pages/round";
 import { currentPath } from "@/ui/router";
 import { sessionStore } from "@/ui/stores";
+import { appDialog } from "@/ui/components/app-dialog";
 
 function makeRound(): Round {
   return {
@@ -97,6 +98,7 @@ beforeEach(async () => {
   vi.mocked(sessionStore.recordWinner).mockClear();
   vi.mocked(sessionStore.nextRound).mockClear();
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
+  vi.mocked(sessionStore.endSession).mockClear();
   sessionStore.session.value = null;
   sessionStore.generating.value = false;
   currentPath.value = "/session/round";
@@ -164,8 +166,30 @@ describe("RoundPage", () => {
     expect((getByTestId("next-round-btn") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("セッション終了 confirms via appDialog (not window.confirm) and ends the session", async () => {
+    // window.confirm can be silently suppressed in iOS standalone PWAs, which
+    // made this button appear dead on iPhone — the in-app dialog must be used.
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("end-session-btn"));
+    await waitFor(() => expect(sessionStore.endSession).toHaveBeenCalled());
+    expect(confirmSpy).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("セッション終了 does nothing when the appDialog confirm is cancelled", async () => {
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(false);
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("end-session-btn"));
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(sessionStore.endSession).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
   it("alerts when nextRound fails so the operator knows the round is unsaved", async () => {
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    const alertSpy = vi.spyOn(appDialog, "alert").mockResolvedValue(undefined);
     vi.mocked(sessionStore.nextRound).mockRejectedValueOnce(new Error("offline"));
     sessionStore.session.value = makeSession(makeRound());
     const { getByTestId } = render(<RoundPage />);

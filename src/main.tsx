@@ -12,6 +12,7 @@ import "@/ui/theme.css";
 void sessionStore.resume();
 
 // Phase 4+ pages — added incrementally
+import { AppDialogHost } from "@/ui/components/app-dialog";
 import { HomePage } from "@/ui/pages/home";
 import { NewSessionPage } from "@/ui/pages/new-session";
 import { NumberMapPage } from "@/ui/pages/number-map";
@@ -38,6 +39,15 @@ function ComingSoon({ name }: { name: string }) {
 }
 
 function App() {
+  return (
+    <>
+      <CurrentPage />
+      <AppDialogHost />
+    </>
+  );
+}
+
+function CurrentPage() {
   const r = route.value;
   switch (r.name) {
     case "home": return <HomePage />;

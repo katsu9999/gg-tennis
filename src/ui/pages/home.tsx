@@ -8,6 +8,7 @@ import {
   sessionStore,
 } from "@/ui/stores";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
+import { appDialog } from "@/ui/components/app-dialog";
 
 /** A session that's still "ongoing" more than this many hours after creation is
  *  almost certainly an abandoned PWA tab. Surface it so it can be wrapped up
@@ -170,7 +171,7 @@ export function HomePage() {
                   type="button"
                   data-testid="live-end-now-btn"
                   onClick={async () => {
-                    if (!confirm("このセッションを終了してランキングに反映します。よろしいですか？")) return;
+                    if (!(await appDialog.confirm("このセッションを終了してランキングに反映します。よろしいですか？"))) return;
                     try {
                       // resume() should have already hydrated sessionStore, but
                       // call it again defensively in case the page was opened
@@ -180,7 +181,7 @@ export function HomePage() {
                       await liveSessionStore.refresh();
                     } catch (e) {
                       const msg = e instanceof Error ? e.message : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-                      alert(`終了に失敗しました:\n${msg}`);
+                      void appDialog.alert(`終了に失敗しました:\n${msg}`);
                     }
                   }}
                   style={{

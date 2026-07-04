@@ -4,6 +4,7 @@ import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { navigate, linkTo } from "@/ui/router";
+import { appDialog } from "@/ui/components/app-dialog";
 
 const showNames = signal(false);
 
@@ -11,7 +12,7 @@ function generateNextRound(): void {
   sessionStore.nextRound().catch((e) => {
     console.error("nextRound failed", e);
     const msg = e instanceof Error ? e.message : String(e);
-    alert(
+    void appDialog.alert(
       `ラウンドの保存に失敗しました:\n${msg}\n` +
         "画面のラウンドはまだサーバーに保存されていません。電波を確認してください。" +
         "（次の操作（勝敗タップ等）が成功すれば自動的に保存されます）",
@@ -125,7 +126,7 @@ export function RoundPage() {
               const msg = e instanceof Error
                 ? e.message
                 : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-              alert(`勝敗の保存に失敗しました:\n${msg}`);
+              void appDialog.alert(`勝敗の保存に失敗しました:\n${msg}`);
             });
           }}
         />
@@ -190,13 +191,13 @@ export function RoundPage() {
         type="button"
         data-testid="end-session-btn"
         onClick={async () => {
-          if (!confirm("セッションを終了してランキングに反映します。\n（間違えた場合は「過去のセッション」から削除できます）")) return;
+          if (!(await appDialog.confirm("セッションを終了してランキングに反映します。\n（間違えた場合は「過去のセッション」から削除できます）"))) return;
           try {
             await sessionStore.endSession();
             navigate("/");
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            alert(`セッション終了に失敗しました:\n${msg}`);
+            void appDialog.alert(`セッション終了に失敗しました:\n${msg}`);
             console.error("endSession failed", e);
           }
         }}
