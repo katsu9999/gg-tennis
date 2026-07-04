@@ -4,6 +4,7 @@ import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { navigate, linkTo } from "@/ui/router";
+import { appDialog } from "@/ui/components/app-dialog";
 
 // Module-scoped UI state. Survives navigation within the session; reset
 // inside `useEffect` based on session/round counts.
@@ -143,7 +144,7 @@ export function HistoryPage() {
               const msg = e instanceof Error
                 ? e.message
                 : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-              alert(`勝敗の保存に失敗しました:\n${msg}`);
+              void appDialog.alert(`勝敗の保存に失敗しました:\n${msg}`);
             });
           }}
         />

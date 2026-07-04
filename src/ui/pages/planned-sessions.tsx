@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { plannedSessionStore, rsvpStore, rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
+import { appDialog } from "@/ui/components/app-dialog";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import type { RsvpStatus } from "@/data/rsvp-repository";
 import { navigate, linkTo } from "@/ui/router";
@@ -125,7 +126,7 @@ async function rotateLink(sessionId: string): Promise<void> {
 }
 
 async function deletePlanned(id: string): Promise<void> {
-  if (!confirm("この将来セッションを削除しますか？")) return;
+  if (!(await appDialog.confirm("この将来セッションを削除しますか？"))) return;
   busy.value = true;
   error.value = null;
   try {

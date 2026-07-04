@@ -7,6 +7,7 @@ import type { SessionRow } from "@/data/session-repository";
 import { CourtView } from "@/ui/components/court-view";
 import { linkTo } from "@/ui/router";
 import { useRequirePin } from "@/ui/components/pin-modal";
+import { appDialog } from "@/ui/components/app-dialog";
 
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
@@ -134,7 +135,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
     gate(async () => {
       const pin = pinStore.getPin();
       if (!pin) {
-        alert("PIN が取得できませんでした");
+        void appDialog.alert("PIN が取得できませんでした");
         return;
       }
       try {
@@ -145,7 +146,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         void rankingStore.load();
       } catch (e) {
         console.error("update past winner failed", e);
-        alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
+        void appDialog.alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
       }
     });
   }
@@ -154,7 +155,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
     gate(async () => {
       const pin = pinStore.getPin();
       if (!pin) {
-        alert("PIN が取得できませんでした");
+        void appDialog.alert("PIN が取得できませんでした");
         return;
       }
       busy.value = true;
@@ -168,7 +169,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         void rankingStore.load();
       } catch (e) {
         console.error("delete session failed", e);
-        alert(`セッション削除に失敗しました:\n${formatError(e)}`);
+        void appDialog.alert(`セッション削除に失敗しました:\n${formatError(e)}`);
       } finally {
         busy.value = false;
       }
@@ -199,8 +200,8 @@ function SessionDetail({ session }: { session: SessionRow }) {
           type="button"
           data-testid="past-delete"
           disabled={busy.value}
-          onClick={() => {
-            if (!confirm("このセッションを削除します。\n試合結果もランキングから除かれます。\nよろしいですか？")) return;
+          onClick={async () => {
+            if (!(await appDialog.confirm("このセッションを削除します。\n試合結果もランキングから除かれます。\nよろしいですか？"))) return;
             handleDelete();
           }}
           style={{

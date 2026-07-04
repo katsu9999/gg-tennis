@@ -1,6 +1,7 @@
 import { useEffect } from "preact/hooks";
 import { navigate, linkTo } from "@/ui/router";
 import { sessionStore, rosterStore } from "@/ui/stores";
+import { appDialog } from "@/ui/components/app-dialog";
 import type { InMemorySession } from "@/state/session-store";
 
 export function NumberMapPage() {
@@ -35,7 +36,7 @@ export function NumberMapPage() {
       .catch((e) => {
         console.error("startFirstRound failed", e);
         const msg = e instanceof Error ? e.message : String(e);
-        alert(`ラウンドの生成・保存に失敗しました:\n${msg}\n電波を確認してもう一度お試しください。`);
+        void appDialog.alert(`ラウンドの生成・保存に失敗しました:\n${msg}\n電波を確認してもう一度お試しください。`);
       });
   }
 
