@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/generate-placeholder-icons.mjs && vite",
+    "dev:local": "node scripts/generate-placeholder-icons.mjs && VITE_FLAVOR=local vite",
     "prebuild": "node scripts/generate-placeholder-icons.mjs",
     "build": "tsc --noEmit && vite build",
+    "build:local": "tsc --noEmit && VITE_FLAVOR=local VITE_BASE_URL=/ vite build --outDir dist-local",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

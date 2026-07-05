@@ -56,6 +56,38 @@ describe("pin store", () => {
     expect(store.getPin()).toBeNull();
   });
 
+  it("setClubPin rotates via RPC and re-caches the new PIN", async () => {
+    const client = makeClient({ data: true });
+    const store = createPinStore(client);
+    await store.verify("1234");
+    await store.setClubPin("567890");
+    expect(client.rpc).toHaveBeenCalledWith("set_club_pin", {
+      p_pin: "1234",
+      p_new_pin: "567890",
+    });
+    expect(store.isUnlocked.value).toBe(true);
+    expect(store.getPin()).toBe("567890");
+  });
+
+  it("setClubPin throws when locked, without hitting RPC", async () => {
+    const client = makeClient({ data: true });
+    const store = createPinStore(client);
+    await expect(store.setClubPin("567890")).rejects.toThrow(/PIN/);
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("setClubPin surfaces RPC errors and keeps the old PIN cached", async () => {
+    const client = makeClient({ data: true });
+    const store = createPinStore(client);
+    await store.verify("1234");
+    (client.rpc as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      error: { message: "pin too short" },
+    });
+    await expect(store.setClubPin("1")).rejects.toThrow("pin too short");
+    expect(store.getPin()).toBe("1234");
+    expect(store.isUnlocked.value).toBe(true);
+  });
+
   it("verifying signal toggles around the RPC call", async () => {
     let resolveRpc: (v: unknown) => void = () => undefined;
     const rpcPromise = new Promise((res) => { resolveRpc = res; });

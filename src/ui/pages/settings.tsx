@@ -1,7 +1,6 @@
 import { useState } from "preact/hooks";
 import { hostStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
-import { supabase } from "@/data/supabase-client";
 import { linkTo } from "@/ui/router";
 
 export function SettingsPage() {
@@ -80,22 +79,12 @@ function PinCard() {
   async function rotate() {
     setMsg(null);
     setErr(null);
-    const pin = pinStore.getPin();
-    if (!pin) {
-      setErr("PIN がロックされています");
+    try {
+      await pinStore.setClubPin(newPin);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
       return;
     }
-    const { error } = await supabase.rpc("set_club_pin", {
-      p_pin: pin,
-      p_new_pin: newPin,
-    });
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-    // The cached PIN is now stale; lock and re-cache the new one.
-    pinStore.lock();
-    await pinStore.verify(newPin);
     setNewPin("");
     setMsg("PIN を更新しました");
   }
