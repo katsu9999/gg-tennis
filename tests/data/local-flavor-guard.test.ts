@@ -46,6 +46,11 @@ function runtimeImports(source: string): string[] {
   for (const m of source.matchAll(/(?:^|\n)\s*import\s*["']([^"']+)["']/g)) {
     specs.push(m[1]!);
   }
+  // Dynamic imports: import("...") — Vite splits these into lazy chunks, they
+  // are NOT tree-shaken, so they count as reachable.
+  for (const m of source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+    specs.push(m[1]!);
+  }
   return specs;
 }
 

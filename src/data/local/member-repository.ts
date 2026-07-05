@@ -1,6 +1,6 @@
 import type { Member } from "@/engine/models";
 import type { MemberRepository } from "@/data/member-repository";
-import { createCollection, type KV } from "@/data/local/kv";
+import { createCollection, createCounter, type KV } from "@/data/local/kv";
 
 /**
  * Device-local MemberRepository. The `pin` arguments required by the shared
@@ -37,6 +37,10 @@ function byName(a: MemberRow, b: MemberRow): number {
 export function createLocalMemberRepository(kv: KV): MemberRepository {
   const members = createCollection<MemberRow>(kv, "cs_members");
   const history = createCollection<PairRow>(kv, "cs_history");
+  // Ids are permanent (pair-history keys reference them), so never reuse one
+  // after a delete — a persisted counter mirrors a DB sequence. max(id)+1
+  // would hand a deleted member's id to a newcomer.
+  const seq = createCounter(kv, "cs_member_seq");
 
   async function mutateOne(id: number, patch: Partial<MemberRow>): Promise<Member> {
     let updated: MemberRow | undefined;
@@ -62,16 +66,9 @@ export function createLocalMemberRepository(kv: KV): MemberRepository {
         .map(toMember);
     },
     async add({ name }) {
+      const nextId = await seq.next();
       let added!: MemberRow;
-      await members.mutateRows(async (rows) => {
-        // Ids are permanent (pair-history keys reference them), so never
-        // reuse one after a delete — mirror a DB sequence with a stored
-        // counter. Reading/writing the seq key inside this callback is safe:
-        // adds are serialized by the members-key queue and nothing else
-        // touches the seq key.
-        const seq = (await kv.get<number>("cs_member_seq")) ?? 0;
-        const nextId = seq + 1;
-        await kv.set("cs_member_seq", nextId);
+      await members.mutateRows((rows) => {
         added = { id: nextId, name, status: "active", created_at: new Date().toISOString() };
         return [...rows, added];
       });

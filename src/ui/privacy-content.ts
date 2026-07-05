@@ -79,3 +79,27 @@ No tracking cookies. Auth tokens use LocalStorage ("strictly necessary"). No PEC
 ## 9. Contact
 admin@example.com
 `;
+
+/** Local (device-only) flavour — shipped to Google Play as "Court Shuffle".
+ *  Also published as a static page on the GG Pages deploy for the Play
+ *  listing's privacy-policy URL (Phase 5). */
+export const PRIVACY_LOCAL_EN = `# Privacy Notice — Court Shuffle
+
+## 1. The short version
+Court Shuffle collects **no data**. Everything you enter stays on your device.
+
+## 2. What is stored, and where
+- Player names, venues, sessions, and pairing history are stored **only in this app's local storage on your device** (IndexedDB).
+- Nothing is sent to any server. The app makes **no network requests** and works fully offline.
+- There are no accounts, no sign-in, no analytics, no ads, and no tracking of any kind.
+
+## 3. Your control
+- **Export**: Settings → JSON export saves a full copy of your data as a file you own.
+- **Delete**: Settings → Delete all data erases everything instantly. Uninstalling the app does the same.
+
+## 4. Player names
+Names you type in are visible only to you, on your device. As the session organizer, it is your responsibility to use names your players are comfortable with (initials work fine).
+
+## 5. Contact
+For questions about this notice, contact the developer via the app's Google Play listing page.
+`;

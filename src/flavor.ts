@@ -13,3 +13,6 @@ export type Flavor = "gg" | "local";
 
 export const FLAVOR: Flavor = import.meta.env.VITE_FLAVOR === "local" ? "local" : "gg";
 export const IS_LOCAL = FLAVOR === "local";
+
+/** Short brand mark shown in page headers. */
+export const BRAND = IS_LOCAL ? "Court Shuffle" : "GG";

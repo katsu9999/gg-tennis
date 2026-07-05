@@ -5,6 +5,7 @@ import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
+import { BRAND, IS_LOCAL } from "@/flavor";
 
 const showNames = signal(false);
 
@@ -100,7 +101,7 @@ export function RoundPage() {
         }}
       >
         <strong style={{ fontSize: 18 }}>
-          GG <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
+          {BRAND} <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
         </strong>
         <label style={{ fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
           <input
@@ -120,6 +121,7 @@ export function RoundPage() {
           todayNumbers={todayNumbers}
           nameFor={nameFor}
           showNames={showNames.value}
+          winnerTapEnabled={!IS_LOCAL}
           onSetWinner={(w) => {
             sessionStore.recordWinner(c.number, w).catch((e) => {
               console.error("recordWinner failed", e);

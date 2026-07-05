@@ -18,7 +18,9 @@ export function createLocalPinStore(): PinStore {
       return true;
     },
     getPin() {
-      return "";
+      // Must be truthy: useRequirePin's gate() checks `isUnlocked && getPin()`
+      // — an empty string would pop the PIN modal. Local repos ignore the value.
+      return "local";
     },
     lock() {
       // no-op: there is nothing to lock on a single-user device

@@ -4,6 +4,7 @@ import { rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { exportMemberData } from "@/data/gdpr-export";
 import { linkTo } from "@/ui/router";
+import { IS_LOCAL } from "@/flavor";
 
 // Module-scoped UI state
 const newName = signal("");
@@ -217,16 +218,18 @@ function MemberRow({
                 アーカイブ
               </button>
             )}
-            <button
-              type="button"
-              data-testid={`export-${id}`}
-              onClick={() => { void doExport(id); }}
-              disabled={busy.value}
-              style={ghostButtonStyle}
-              title="このメンバーのデータを JSON でエクスポート (GDPR §17.4)"
-            >
-              エクスポート
-            </button>
+            {!IS_LOCAL && (
+              <button
+                type="button"
+                data-testid={`export-${id}`}
+                onClick={() => { void doExport(id); }}
+                disabled={busy.value}
+                style={ghostButtonStyle}
+                title="このメンバーのデータを JSON でエクスポート (GDPR §17.4)"
+              >
+                エクスポート
+              </button>
+            )}
             <button
               type="button"
               data-testid={`delete-${id}`}

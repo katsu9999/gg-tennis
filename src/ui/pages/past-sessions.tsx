@@ -8,6 +8,7 @@ import { CourtView } from "@/ui/components/court-view";
 import { linkTo } from "@/ui/router";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { appDialog } from "@/ui/components/app-dialog";
+import { IS_LOCAL } from "@/flavor";
 
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
@@ -246,6 +247,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
               todayNumbers={todayNumbers}
               nameFor={nameFor}
               showNames={showNames.value}
+              winnerTapEnabled={!IS_LOCAL}
               onSetWinner={(w) => { void handleSetWinner(round.index, c.number, w); }}
             />
           ))}

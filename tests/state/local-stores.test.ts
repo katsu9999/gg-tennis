@@ -31,14 +31,16 @@ function sessionRow(): SessionRow {
 }
 
 describe("createLocalPinStore", () => {
-  it("is always unlocked: verify succeeds, getPin returns a string, lock is a no-op", async () => {
+  it("is always unlocked: verify succeeds, getPin returns a TRUTHY string, lock is a no-op", async () => {
     const store = createLocalPinStore();
     expect(store.isUnlocked.value).toBe(true);
     expect(await store.verify("anything")).toBe(true);
-    expect(typeof store.getPin()).toBe("string");
+    // useRequirePin's gate() checks `isUnlocked && getPin()` — an empty
+    // string would falsy-fail the gate and pop the PIN modal locally.
+    expect(store.getPin()).toBeTruthy();
     store.lock();
     expect(store.isUnlocked.value).toBe(true);
-    expect(store.getPin()).not.toBeNull();
+    expect(store.getPin()).toBeTruthy();
   });
 
   it("setClubPin rejects loudly — there is no PIN to rotate locally", async () => {

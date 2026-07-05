@@ -9,6 +9,7 @@ import {
 } from "@/ui/stores";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import { appDialog } from "@/ui/components/app-dialog";
+import { BRAND, IS_LOCAL } from "@/flavor";
 
 /** A session that's still "ongoing" more than this many hours after creation is
  *  almost certainly an abandoned PWA tab. Surface it so it can be wrapped up
@@ -113,9 +114,9 @@ export function HomePage() {
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 24 }}>
         <strong style={{ fontSize: 32, color: "var(--ink)", letterSpacing: "-0.02em" }}>
-          GG
+          {BRAND}
         </strong>
-        <span class="muted">Tennis Court Shuffle</span>
+        {!IS_LOCAL && <span class="muted">Tennis Court Shuffle</span>}
       </header>
 
       {live && (() => {
@@ -204,16 +205,18 @@ export function HomePage() {
         );
       })()}
 
-      <section class="card" style={{ marginBottom: 16 }} data-testid="next-session-card">
-        <h2 style={{ margin: 0, fontSize: 18 }}>📅 次回セッション</h2>
-        {nextSessionCard}
-      </section>
+      {!IS_LOCAL && (
+        <section class="card" style={{ marginBottom: 16 }} data-testid="next-session-card">
+          <h2 style={{ margin: 0, fontSize: 18 }}>📅 次回セッション</h2>
+          {nextSessionCard}
+        </section>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <NavButton label="セッション開始 →" to="/session/new" />
-        <NavButton label="将来セッション (準備中)" to="/planned" disabled />
+        {!IS_LOCAL && <NavButton label="将来セッション (準備中)" to="/planned" disabled />}
         <NavButton label="名簿" to="/roster" />
-        <NavButton label="ランキング" to="/ranking" />
+        {!IS_LOCAL && <NavButton label="ランキング" to="/ranking" />}
         <NavButton label="過去セッション" to="/sessions/past" />
         <NavButton label="設定" to="/settings" />
       </div>

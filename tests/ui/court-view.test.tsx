@@ -104,6 +104,31 @@ describe("CourtView", () => {
     expect(getByText("山本")).toBeDefined();
   });
 
+  it("winnerTapEnabled=false: taps do nothing (local flavour — winner recording cut)", () => {
+    const onSetWinner = vi.fn();
+    const { container } = render(
+      <CourtView
+        court={baseCourt}
+        todayNumbers={todayNumbers}
+        nameFor={noNames}
+        onSetWinner={onSetWinner}
+        winnerTapEnabled={false}
+      />,
+    );
+    fireEvent.click(container.querySelector('[data-testid="team-a"]')!);
+    fireEvent.click(container.querySelector('[data-testid="team-b"]')!);
+    expect(onSetWinner).not.toHaveBeenCalled();
+  });
+
+  it("winnerTapEnabled defaults to true (gg flavour unchanged)", () => {
+    const onSetWinner = vi.fn();
+    const { container } = render(
+      <CourtView court={baseCourt} todayNumbers={todayNumbers} nameFor={noNames} onSetWinner={onSetWinner} />,
+    );
+    fireEvent.click(container.querySelector('[data-testid="team-a"]')!);
+    expect(onSetWinner).toHaveBeenCalledWith("A");
+  });
+
   it("falls back to G for guests when showNames is false", () => {
     const guestCourt: Court = {
       ...baseCourt,

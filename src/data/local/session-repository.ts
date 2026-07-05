@@ -44,9 +44,12 @@ export function createLocalSessionRepository(kv: KV): SessionRepository {
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     },
     async loadById(id) {
-      const fromOngoing = (await ongoing.readRows()).find((r) => r.id === id);
-      if (fromOngoing) return fromOngoing;
-      return (await past.readRows()).find((r) => r.id === id) ?? null;
+      // Check past FIRST: write() moving a session ongoing→past writes the
+      // past copy before removing the ongoing one, so if both exist the past
+      // row is the newer intent (the reverse transition never happens).
+      const fromPast = (await past.readRows()).find((r) => r.id === id);
+      if (fromPast) return fromPast;
+      return (await ongoing.readRows()).find((r) => r.id === id) ?? null;
     },
     upsert: write,
     // The GG repo splits update from upsert purely for RLS reasons; locally
