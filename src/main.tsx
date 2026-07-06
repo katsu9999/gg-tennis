@@ -11,6 +11,12 @@ import "@/ui/theme.css";
 // the operator loses today's match.
 void sessionStore.resume();
 
+// Android hardware back button (Capacitor shell). IS_LOCAL is a build-time
+// constant, so the GG bundle drops both the branch and the chunk.
+if (IS_LOCAL) {
+  void import("@/native/back-button").then((m) => m.registerAndroidBackButton());
+}
+
 // Phase 4+ pages — added incrementally
 import { AppDialogHost } from "@/ui/components/app-dialog";
 import { HomePage } from "@/ui/pages/home";
