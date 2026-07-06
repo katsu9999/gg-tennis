@@ -48,6 +48,8 @@ Automated adb smoke by Claude. PASS with one fix shipped:
   saved" with no file). FIXED: native path now writes to app cache and opens
   the share sheet (Filesystem + Share plugins); verified — share sheet shows
   "court-shuffle-backup-2026-07-06.json".
-- ⏭ Not yet run on emulator: rotate, install-over-update data survival,
-  wipe-all on device (unit-tested). Run on a physical device before upload.
+- ✅ install-over-update (adb install -r new build): roster Active(5) and
+  past sessions survived — frozen WebView origin holds
+- ⏭ Not yet run on emulator: rotate, wipe-all on device (unit-tested).
+  Run once on a physical device before the Play upload.
 
