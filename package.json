@@ -23,6 +23,8 @@
     "@capacitor/android": "^8.4.1",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.1",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
     "@preact/signals": "^1.2.0",
     "@supabase/supabase-js": "^2.45.0",
     "idb-keyval": "^6.2.1",

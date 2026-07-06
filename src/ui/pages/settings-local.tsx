@@ -82,13 +82,39 @@ function DataCard() {
     setMsg(null);
     try {
       const backup = await buildBackup(createIdbKV());
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `court-shuffle-backup-${backup.exportedAt.slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const json = JSON.stringify(backup, null, 2);
+      const fileName = `court-shuffle-backup-${backup.exportedAt.slice(0, 10)}.json`;
+      const { Capacitor } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        // Android WebView silently discards blob-URL downloads (verified on
+        // device 2026-07-06: "Backup saved" showed, no file landed anywhere).
+        // Write to app cache and hand off via the native share sheet instead.
+        const { Filesystem, Directory, Encoding } = await import("@capacitor/filesystem");
+        const { Share } = await import("@capacitor/share");
+        const written = await Filesystem.writeFile({
+          path: fileName,
+          data: json,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+        try {
+          await Share.share({ title: fileName, url: written.uri });
+        } catch (shareErr) {
+          // User dismissed the share sheet — not an error, but no backup
+          // was delivered either, so show nothing.
+          const m = shareErr instanceof Error ? shareErr.message : String(shareErr);
+          if (/cancel/i.test(m)) return;
+          throw shareErr;
+        }
+      } else {
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
       setMsg(t.settingsLocal.exportDone);
     } catch (e) {
       void appDialog.alert(t.settingsLocal.exportFailed(e instanceof Error ? e.message : String(e)));

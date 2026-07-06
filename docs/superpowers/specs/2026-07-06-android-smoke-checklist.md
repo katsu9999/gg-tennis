@@ -31,3 +31,23 @@ Play upload. Build: `npm run build:local && npx cap sync android`, then
 
 ## Sign-off
 Date / build / device / result — record here per run.
+
+### 2026-07-06 · debug build (versionName 1.0.0) · Pixel 7 AVD (Android 16 / API 36, emulator)
+Automated adb smoke by Claude. PASS with one fix shipped:
+- ✅ English home, generic brand, no Japanese anywhere
+- ✅ Roster: 5 players added, no PIN prompt, no per-member export button
+- ✅ New session → number draw → R1/R2 generated; fair rotation observed
+  (R1 rested #2, R2 rested #1)
+- ✅ Winner taps inert (no ✓, session data unchanged)
+- ✅ Hardware back: round → number-map (history back); home → minimized
+  (launcher became top activity, app kept alive)
+- ✅ force-stop → relaunch: live session badge + full R2 state resumed
+  (IndexedDB persistence)
+- ✅ End session (EN confirm dialog) → past sessions lists "5 players · 2R"
+- 🐛→✅ Export JSON: blob download silently discarded by WebView ("Backup
+  saved" with no file). FIXED: native path now writes to app cache and opens
+  the share sheet (Filesystem + Share plugins); verified — share sheet shows
+  "court-shuffle-backup-2026-07-06.json".
+- ⏭ Not yet run on emulator: rotate, install-over-update data survival,
+  wipe-all on device (unit-tested). Run on a physical device before upload.
+

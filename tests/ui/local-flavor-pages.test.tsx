@@ -12,6 +12,24 @@ import "fake-indexeddb/auto";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/preact";
 
+const native = vi.hoisted(() => ({
+  isNative: false,
+  writeFile: vi.fn().mockResolvedValue({ uri: "file:///cache/backup.json" }),
+  share: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => native.isNative },
+}));
+vi.mock("@capacitor/filesystem", () => ({
+  Filesystem: { writeFile: native.writeFile },
+  Directory: { Cache: "CACHE" },
+  Encoding: { UTF8: "utf8" },
+}));
+vi.mock("@capacitor/share", () => ({
+  Share: { share: native.share },
+}));
+
 vi.mock("@/flavor", () => ({
   FLAVOR: "local",
   IS_LOCAL: true,
@@ -74,6 +92,9 @@ function ongoingSession(): InMemorySession {
 
 beforeEach(() => {
   sessionStore.session.value = null;
+  native.isNative = false;
+  native.writeFile.mockClear();
+  native.share.mockClear();
 });
 
 describe("HomePage (local flavour, real local stores)", () => {
@@ -132,6 +153,33 @@ describe("SettingsLocalPage", () => {
     await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(2));
     expect(queryByTestId("data-msg")).toBeNull(); // declined → no wipe message
     confirmSpy.mockRestore();
+  });
+
+  it("export on a native shell writes to cache and opens the share sheet (blob downloads are discarded by Android WebView)", async () => {
+    native.isNative = true;
+    const { container, findByTestId } = render(<SettingsLocalPage />);
+    fireEvent.click(container.querySelector('[data-testid="export-all-btn"]')!);
+    const msg = await findByTestId("data-msg");
+    expect(msg.textContent).toContain("Backup saved");
+    expect(native.writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringMatching(/^court-shuffle-backup-.*\.json$/) }),
+    );
+    expect(native.share).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "file:///cache/backup.json" }),
+    );
+  });
+
+  it("export share-sheet dismissal is silent — no success message, no error dialog", async () => {
+    native.isNative = true;
+    native.share.mockRejectedValueOnce(new Error("Share canceled"));
+    const alertSpy = vi.spyOn(appDialog, "alert").mockResolvedValue(undefined);
+    const { container, queryByTestId } = render(<SettingsLocalPage />);
+    fireEvent.click(container.querySelector('[data-testid="export-all-btn"]')!);
+    await waitFor(() => expect(native.share).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(queryByTestId("data-msg")).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 
   it("wipe-all with double confirm wipes and reports", async () => {
