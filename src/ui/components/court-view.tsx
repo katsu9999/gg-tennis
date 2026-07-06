@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import type { AttendeeRef, Court } from "@/engine/models";
+import { t } from "@/ui/i18n";
 
 export interface CourtViewProps {
   court: Court;
@@ -72,7 +73,7 @@ export function CourtView(props: CourtViewProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <strong style={{ letterSpacing: "0.05em", fontSize: 13 }}>COURT {court.number}</strong>
         <span class={court.type === "doubles" ? "tag-d" : "tag-s"} style={{ fontSize: 11 }}>
-          {court.type === "doubles" ? "ダブルス" : "シングルス"}
+          {court.type === "doubles" ? t.common.doubles : t.common.singles}
         </span>
       </div>
       <div

@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { hostStore } from "@/ui/stores";
 import { linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
 import { createIdbKV } from "@/data/local/kv";
 import { buildBackup, wipeAllData } from "@/data/local/backup";
 
@@ -16,20 +17,20 @@ import { buildBackup, wipeAllData } from "@/data/local/backup";
 export function SettingsLocalPage() {
   return (
     <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>設定</h2>
+      <h2 style={{ marginTop: 0 }}>{t.settingsLocal.title}</h2>
 
       <HostLabelCard />
       <DataCard />
 
       <section class="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, fontSize: 15 }}>プライバシー</h3>
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.settingsLocal.privacyTitle}</h3>
         <p style={{ margin: "8px 0" }}>
-          <a href={linkTo("/privacy")}>プライバシーノーティス</a>
+          <a href={linkTo("/privacy")}>{t.settingsLocal.privacyLink}</a>
         </p>
       </section>
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
     </main>
   );
@@ -40,16 +41,16 @@ function HostLabelCard() {
 
   return (
     <section class="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0, fontSize: 15 }}>あなたの表示名</h3>
+      <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.settingsLocal.displayName}</h3>
       <p class="muted" style={{ margin: "8px 0", fontSize: 13 }}>
-        セッション開始時に「○○ さんが運営中」と表示されます。任意。
+        {t.settingsLocal.displayNameHint}
       </p>
       <div style={{ display: "flex", gap: 8 }}>
         <input
           type="text"
           value={label}
           onInput={(e) => setLabel((e.target as HTMLInputElement).value)}
-          placeholder="例: Katsu"
+          placeholder={t.settingsLocal.displayNamePlaceholder}
           data-testid="host-label-input"
           style={{
             flex: 1,
@@ -65,7 +66,7 @@ function HostLabelCard() {
           data-testid="host-label-save"
           onClick={() => hostStore.setLabel(label.trim())}
         >
-          保存
+          {t.settingsLocal.save}
         </button>
       </div>
     </section>
@@ -88,24 +89,24 @@ function DataCard() {
       a.download = `court-shuffle-backup-${backup.exportedAt.slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setMsg("バックアップを保存しました");
+      setMsg(t.settingsLocal.exportDone);
     } catch (e) {
-      void appDialog.alert(`エクスポートに失敗しました:\n${e instanceof Error ? e.message : String(e)}`);
+      void appDialog.alert(t.settingsLocal.exportFailed(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
   }
 
   async function wipeAll() {
-    if (!(await appDialog.confirm("すべてのデータ（名簿・セッション・ペア履歴）を削除します。よろしいですか？"))) return;
-    if (!(await appDialog.confirm("この操作は取り消せません。本当に削除しますか？"))) return;
+    if (!(await appDialog.confirm(t.settingsLocal.wipeConfirm1))) return;
+    if (!(await appDialog.confirm(t.settingsLocal.wipeConfirm2))) return;
     setBusy(true);
     setMsg(null);
     try {
       await wipeAllData(createIdbKV());
-      setMsg("すべてのデータを削除しました");
+      setMsg(t.settingsLocal.wipeDone);
     } catch (e) {
-      void appDialog.alert(`削除に失敗しました:\n${e instanceof Error ? e.message : String(e)}`);
+      void appDialog.alert(t.settingsLocal.wipeFailed(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
@@ -113,10 +114,9 @@ function DataCard() {
 
   return (
     <section class="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0, fontSize: 15 }}>データ</h3>
+      <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.settingsLocal.dataTitle}</h3>
       <p class="muted" style={{ margin: "8px 0", fontSize: 13 }}>
-        すべてのデータはこの端末の中だけに保存されます。
-        バックアップは JSON エクスポートで行ってください。
+        {t.settingsLocal.dataHint}
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
@@ -127,7 +127,7 @@ function DataCard() {
           onClick={() => { void exportAll(); }}
           style={{ flex: 1 }}
         >
-          JSON エクスポート
+          {t.settingsLocal.exportBtn}
         </button>
         <button
           type="button"
@@ -146,7 +146,7 @@ function DataCard() {
             cursor: busy ? "not-allowed" : "pointer",
           }}
         >
-          全データ削除
+          {t.settingsLocal.wipeBtn}
         </button>
       </div>
       {msg && <p data-testid="data-msg" style={{ margin: "8px 0 0", fontSize: 13, color: "green" }}>{msg}</p>}

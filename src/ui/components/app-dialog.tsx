@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { t } from "@/ui/i18n";
 
 /**
  * In-app replacement for window.confirm / window.alert.
@@ -90,7 +91,7 @@ export function AppDialogHost() {
               style={{ flex: 1 }}
               onClick={() => close(false)}
             >
-              キャンセル
+              {t.common.cancel}
             </button>
           )}
           <button
@@ -100,7 +101,7 @@ export function AppDialogHost() {
             style={{ flex: 1 }}
             onClick={() => close(true)}
           >
-            OK
+            {t.common.ok}
           </button>
         </div>
       </div>

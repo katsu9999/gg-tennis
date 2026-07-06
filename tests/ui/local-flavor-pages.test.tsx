@@ -18,6 +18,13 @@ vi.mock("@/flavor", () => ({
   BRAND: "Court Shuffle",
 }));
 vi.mock("@/ui/stores", () => import("@/ui/stores.local"));
+// Drive the pages with the EN table, exactly as VITE_LOCALE=en builds do —
+// this is the en "snapshot" net (testids alone can't catch interpolation
+// mistakes or missed extractions).
+vi.mock("@/ui/i18n", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/ui/i18n")>();
+  return { ...mod, LOCALE: "en", t: mod.en };
+});
 
 import { HomePage } from "@/ui/pages/home";
 import { RoundPage } from "@/ui/pages/round";
@@ -82,11 +89,14 @@ describe("HomePage (local flavour, real local stores)", () => {
     const { container, queryByText } = render(<HomePage />);
     await waitFor(() => expect(container.textContent).toContain("Court Shuffle"));
     expect(container.querySelector('[data-testid="next-session-card"]')).toBeNull();
-    expect(queryByText(/将来セッション/)).toBeNull();
-    expect(queryByText("ランキング")).toBeNull();
-    // Core shuffle nav stays.
-    expect(queryByText("名簿")).toBeDefined();
-    expect(queryByText("過去セッション")).toBeDefined();
+    expect(queryByText(/Planned/)).toBeNull();
+    expect(queryByText("Rankings")).toBeNull();
+    // Core shuffle nav stays — in English.
+    expect(queryByText("Roster")).not.toBeNull();
+    expect(queryByText("Past sessions")).not.toBeNull();
+    expect(queryByText("Settings")).not.toBeNull();
+    // Nothing Japanese leaks into the EN build.
+    expect(container.textContent).not.toMatch(/[ぁ-んァ-ヶ一-龯]/);
   });
 });
 
@@ -100,15 +110,17 @@ describe("RoundPage (local flavour)", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(teamA.textContent).not.toContain("✓");
     expect(sessionStore.session.value!.rounds[0]!.courts[0]!.winner).toBe("none");
+    expect(container.textContent).not.toMatch(/[ぁ-んァ-ヶ一-龯]/);
   });
 });
 
 describe("SettingsLocalPage", () => {
-  it("renders host label, JSON export, and wipe-all controls", () => {
+  it("renders host label, JSON export, and wipe-all controls — in English", () => {
     const { container } = render(<SettingsLocalPage />);
     expect(container.querySelector('[data-testid="host-label-input"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="export-all-btn"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="wipe-all-btn"]')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/[ぁ-んァ-ヶ一-龯]/);
   });
 
   it("wipe-all demands TWO confirms before touching data", async () => {
@@ -127,7 +139,7 @@ describe("SettingsLocalPage", () => {
     const { container, findByTestId } = render(<SettingsLocalPage />);
     fireEvent.click(container.querySelector('[data-testid="wipe-all-btn"]')!);
     const msg = await findByTestId("data-msg");
-    expect(msg.textContent).toContain("削除しました");
+    expect(msg.textContent).toContain("All data deleted");
     confirmSpy.mockRestore();
   });
 });

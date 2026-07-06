@@ -4,6 +4,7 @@ import { rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { exportMemberData } from "@/data/gdpr-export";
 import { linkTo } from "@/ui/router";
+import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
 
 // Module-scoped UI state
@@ -24,7 +25,7 @@ export function resetRosterState(): void {
 
 function requirePin(): string {
   const pin = pinStore.getPin();
-  if (!pin) throw new Error("PIN がロックされています");
+  if (!pin) throw new Error(t.roster.pinLocked);
   return pin;
 }
 
@@ -177,14 +178,14 @@ function MemberRow({
               disabled={busy.value}
               style={ghostButtonStyle}
             >
-              保存
+              {t.roster.save}
             </button>
             <button
               type="button"
               onClick={() => { renaming.value = null; }}
               style={ghostButtonStyle}
             >
-              取消
+              {t.roster.cancelRename}
             </button>
           </>
         ) : (
@@ -195,7 +196,7 @@ function MemberRow({
               onClick={() => { renaming.value = { id, value: name }; }}
               style={ghostButtonStyle}
             >
-              改名
+              {t.roster.rename}
             </button>
             {isArchived ? (
               <button
@@ -205,7 +206,7 @@ function MemberRow({
                 disabled={busy.value}
                 style={ghostButtonStyle}
               >
-                復帰
+                {t.roster.restore}
               </button>
             ) : (
               <button
@@ -215,7 +216,7 @@ function MemberRow({
                 disabled={busy.value}
                 style={ghostButtonStyle}
               >
-                アーカイブ
+                {t.roster.archive}
               </button>
             )}
             {!IS_LOCAL && (
@@ -225,9 +226,9 @@ function MemberRow({
                 onClick={() => { void doExport(id); }}
                 disabled={busy.value}
                 style={ghostButtonStyle}
-                title="このメンバーのデータを JSON でエクスポート (GDPR §17.4)"
+                title={t.roster.exportTooltip}
               >
-                エクスポート
+                {t.roster.export}
               </button>
             )}
             <button
@@ -237,7 +238,7 @@ function MemberRow({
               disabled={busy.value}
               style={{ ...ghostButtonStyle, color: "crimson", borderColor: "crimson" }}
             >
-              削除
+              {t.roster.delete}
             </button>
           </>
         )}
@@ -255,18 +256,20 @@ export function RosterPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>名簿</h2>
+      <h2 style={{ marginTop: 0 }}>{t.roster.title}</h2>
 
       <section class="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, fontSize: 15 }}>新規会員を追加</h3>
-        <p class="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
-          追加・変更にはクラブ PIN が必要です。
-        </p>
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.roster.addTitle}</h3>
+        {!IS_LOCAL && (
+          <p class="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+            {t.roster.pinHint}
+          </p>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
             data-testid="new-member-input"
-            placeholder="名前"
+            placeholder={t.roster.namePlaceholder}
             value={newName.value}
             onInput={(e) => { newName.value = (e.currentTarget as HTMLInputElement).value; }}
             style={{
@@ -284,7 +287,7 @@ export function RosterPage() {
             disabled={busy.value || newName.value.trim().length === 0}
             onClick={() => gate(add)}
           >
-            追加
+            {t.roster.add}
           </button>
         </div>
       </section>
@@ -296,10 +299,10 @@ export function RosterPage() {
       )}
 
       <h3 style={{ fontSize: 15 }}>
-        アクティブ <span class="muted">({rosterStore.active.value.length})</span>
+        {t.roster.activeHeading} <span class="muted">({rosterStore.active.value.length})</span>
       </h3>
       {rosterStore.active.value.length === 0 ? (
-        <p class="muted">アクティブ会員はまだいません。</p>
+        <p class="muted">{t.roster.noActive}</p>
       ) : (
         rosterStore.active.value.map((m) => (
           <MemberRow key={m.id} id={m.id} name={m.name} isArchived={false} gate={gate} />
@@ -307,10 +310,10 @@ export function RosterPage() {
       )}
 
       <h3 style={{ fontSize: 15, marginTop: 24 }}>
-        アーカイブ <span class="muted">({rosterStore.archived.value.length})</span>
+        {t.roster.archivedHeading} <span class="muted">({rosterStore.archived.value.length})</span>
       </h3>
       {rosterStore.archived.value.length === 0 ? (
-        <p class="muted">アーカイブされた会員はいません。</p>
+        <p class="muted">{t.roster.noArchived}</p>
       ) : (
         rosterStore.archived.value.map((m) => (
           <MemberRow key={m.id} id={m.id} name={m.name} isArchived={true} gate={gate} />
@@ -331,10 +334,10 @@ export function RosterPage() {
           }}
         >
           <div class="card" style={{ maxWidth: 420 }}>
-            <h3 style={{ marginTop: 0 }}>本当に削除しますか？</h3>
+            <h3 style={{ marginTop: 0 }}>{t.roster.deleteConfirmTitle}</h3>
             <p>
-              <strong>{confirmingDelete.value.name}</strong> のデータ（会員情報・試合履歴・ペア履歴・RSVP）が
-              <b style={{ color: "crimson" }}>すべて削除</b>されます。元に戻せません（GDPR §17.4 削除権）。
+              <strong>{confirmingDelete.value.name}</strong>{t.roster.deleteConfirmData}
+              <b style={{ color: "crimson" }}>{t.roster.deleteAll}</b>{t.roster.deleteConfirmSuffix}
             </p>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button
@@ -343,7 +346,7 @@ export function RosterPage() {
                 disabled={busy.value}
                 style={{ ...ghostButtonStyle, flex: 1 }}
               >
-                キャンセル
+                {t.common.cancel}
               </button>
               <button
                 type="button"
@@ -353,7 +356,7 @@ export function RosterPage() {
                 onClick={() => gate(doHardDelete)}
                 style={{ flex: 1, background: "crimson", color: "white" }}
               >
-                削除する
+                {t.roster.deleteAction}
               </button>
             </div>
           </div>
@@ -361,7 +364,7 @@ export function RosterPage() {
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
 
       {modal}

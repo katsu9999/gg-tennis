@@ -9,6 +9,7 @@ import {
 } from "@/ui/stores";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
 import { BRAND, IS_LOCAL } from "@/flavor";
 
 /** A session that's still "ongoing" more than this many hours after creation is
@@ -35,7 +36,7 @@ function NavButton({ label, to, disabled }: NavButtonProps) {
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
-      title={disabled ? "準備中" : undefined}
+      title={disabled ? t.home.comingSoon : undefined}
     >
       {label}
     </button>
@@ -85,7 +86,7 @@ export function HomePage() {
               }}
               style={{ flex: 1 }}
             >
-              公開リンクをコピー
+              {t.home.copyPublicLink}
             </button>
           )}
           <button
@@ -94,7 +95,7 @@ export function HomePage() {
             onClick={() => navigate(`/session/new?from=${next.id}`)}
             style={{ flex: 1 }}
           >
-            セッション開始 →
+            {t.home.startSession}
           </button>
         </div>
       </>
@@ -102,10 +103,10 @@ export function HomePage() {
   })() : (
     <>
       <p class="muted" style={{ margin: "8px 0 0" }}>
-        まだ将来セッションがありません。
+        {t.home.noPlanned}
       </p>
       <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-        <a href={linkTo("/planned")}>→ 予定セッションを作成する</a>
+        <a href={linkTo("/planned")}>{t.home.createPlanned}</a>
       </p>
     </>
   );
@@ -145,16 +146,16 @@ export function HomePage() {
                   verticalAlign: "middle",
                 }}
               />
-              {isStale ? "⚠️ 未終了" : "ライブ中"} — {live.location}
+              {isStale ? t.home.staleTitle : t.home.liveTitle} — {live.location}
             </h2>
             {live.host_label && (
               <p class="muted" style={{ margin: "4px 0 4px", fontSize: 13 }}>
-                {live.host_label} さんが開始
+                {t.home.hostStarted(live.host_label)}
               </p>
             )}
             {isStale && (
               <p style={{ margin: "4px 0 8px", fontSize: 13, color: "#b00020" }}>
-                開始から {Math.floor(ageHours)} 時間。終了し忘れていませんか？
+                {t.home.staleHours(Math.floor(ageHours))}
               </p>
             )}
             <div style={{ display: "flex", gap: 8 }}>
@@ -165,14 +166,14 @@ export function HomePage() {
                 style={{ flex: isStale ? 1 : 1 }}
                 data-testid="live-resume-btn"
               >
-                {isStale ? "確認する" : "観戦・運営する →"}
+                {isStale ? t.home.review : t.home.watchOperate}
               </button>
               {isStale && (
                 <button
                   type="button"
                   data-testid="live-end-now-btn"
                   onClick={async () => {
-                    if (!(await appDialog.confirm("このセッションを終了してランキングに反映します。よろしいですか？"))) return;
+                    if (!(await appDialog.confirm(t.home.endNowConfirm))) return;
                     try {
                       // resume() should have already hydrated sessionStore, but
                       // call it again defensively in case the page was opened
@@ -182,7 +183,7 @@ export function HomePage() {
                       await liveSessionStore.refresh();
                     } catch (e) {
                       const msg = e instanceof Error ? e.message : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-                      void appDialog.alert(`終了に失敗しました:\n${msg}`);
+                      void appDialog.alert(t.home.endFailed(msg));
                     }
                   }}
                   style={{
@@ -197,7 +198,7 @@ export function HomePage() {
                     cursor: "pointer",
                   }}
                 >
-                  今すぐ終了
+                  {t.home.endNow}
                 </button>
               )}
             </div>
@@ -207,18 +208,18 @@ export function HomePage() {
 
       {!IS_LOCAL && (
         <section class="card" style={{ marginBottom: 16 }} data-testid="next-session-card">
-          <h2 style={{ margin: 0, fontSize: 18 }}>📅 次回セッション</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{t.home.nextSessionHeading}</h2>
           {nextSessionCard}
         </section>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <NavButton label="セッション開始 →" to="/session/new" />
-        {!IS_LOCAL && <NavButton label="将来セッション (準備中)" to="/planned" disabled />}
-        <NavButton label="名簿" to="/roster" />
-        {!IS_LOCAL && <NavButton label="ランキング" to="/ranking" />}
-        <NavButton label="過去セッション" to="/sessions/past" />
-        <NavButton label="設定" to="/settings" />
+        <NavButton label={t.home.startSession} to="/session/new" />
+        {!IS_LOCAL && <NavButton label={t.home.navPlanned} to="/planned" disabled />}
+        <NavButton label={t.home.navRoster} to="/roster" />
+        {!IS_LOCAL && <NavButton label={t.home.navRanking} to="/ranking" />}
+        <NavButton label={t.home.navPast} to="/sessions/past" />
+        <NavButton label={t.home.navSettings} to="/settings" />
       </div>
     </main>
   );
