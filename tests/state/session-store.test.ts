@@ -405,4 +405,102 @@ describe("session store", () => {
     expect(store.session.value!.rounds).toHaveLength(3);
     expect(store.session.value!.currentRoundIndex).toBe(2);
   });
+
+  // ------------------------------------------------------------------
+  // cancelCurrentRound
+  // ------------------------------------------------------------------
+
+  it("cancelCurrentRound removes a result-less latest round, reverts stats, and persists", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+    await store.nextRound(); // R2 — the accidental tap
+
+    const upsertsBefore = deps.upsertedRows.length;
+    await store.cancelCurrentRound();
+
+    const s = store.session.value!;
+    expect(s.rounds).toHaveLength(1);
+    expect(s.currentRoundIndex).toBe(0);
+    // 8 players / 2 courts / no resters → after cancel everyone is back to play=1
+    for (const [, stats] of s.todayStats) {
+      expect(stats).toEqual({ play: 1, rest: 0 });
+    }
+    // prevResters restored to R1's resters (empty here)
+    expect(s.prevResters).toEqual(s.rounds[0]!.resters);
+    // persisted once
+    expect(deps.upsertedRows.length).toBe(upsertsBefore + 1);
+    expect(deps.upsertedRows.at(-1)!.current_round_index).toBe(0);
+    expect((deps.upsertedRows.at(-1)!.rounds as unknown[]).length).toBe(1);
+  });
+
+  it("cancelCurrentRound throws when the round has a recorded winner", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+    await store.recordWinner(1, "A");
+
+    await expect(store.cancelCurrentRound()).rejects.toThrow(/取り消せません/);
+    expect(store.session.value!.rounds).toHaveLength(1);
+  });
+
+  it("cancelCurrentRound throws when browsing an earlier round", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+    await store.nextRound();
+    store.goToPreviousRound();
+
+    await expect(store.cancelCurrentRound()).rejects.toThrow(/最新のラウンド/);
+    expect(store.session.value!.rounds).toHaveLength(2);
+  });
+
+  it("cancelCurrentRound then nextRound regenerates the identical round (lossless undo)", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+    await store.nextRound();
+
+    const before = JSON.parse(JSON.stringify(store.session.value!.rounds[1]));
+    await store.cancelCurrentRound();
+    await store.nextRound();
+
+    const after = JSON.parse(JSON.stringify(store.session.value!.rounds[1]));
+    expect(after).toEqual(before);
+    expect(store.session.value!.rounds).toHaveLength(2);
+    expect(store.session.value!.currentRoundIndex).toBe(1);
+  });
+
+  it("cancelCurrentRound on the only round leaves an empty session that can regenerate R1", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+
+    await store.cancelCurrentRound();
+    expect(store.session.value!.rounds).toHaveLength(0);
+    expect(store.session.value!.currentRoundIndex).toBe(-1);
+    for (const [, stats] of store.session.value!.todayStats) {
+      expect(stats).toEqual({ play: 0, rest: 0 });
+    }
+
+    await store.nextRound();
+    expect(store.session.value!.rounds).toHaveLength(1);
+    expect(store.session.value!.currentRoundIndex).toBe(0);
+  });
+
+  it("cancelCurrentRound is a silent no-op when no rounds exist", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    const upsertsBefore = deps.upsertedRows.length;
+
+    await store.cancelCurrentRound();
+    expect(store.session.value!.rounds).toHaveLength(0);
+    expect(deps.upsertedRows.length).toBe(upsertsBefore);
+  });
 });

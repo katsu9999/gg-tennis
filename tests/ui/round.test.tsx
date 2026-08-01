@@ -33,6 +33,7 @@ vi.mock("@/ui/stores", async () => {
       startNewSession: vi.fn(),
       nextRound: vi.fn().mockResolvedValue(undefined),
       goToPreviousRound: vi.fn(),
+      cancelCurrentRound: vi.fn().mockResolvedValue(undefined),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
       resume: vi.fn().mockResolvedValue(undefined),
@@ -96,6 +97,8 @@ beforeEach(async () => {
   vi.mocked(sessionStore.recordWinner).mockClear();
   vi.mocked(sessionStore.nextRound).mockClear();
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
+  vi.mocked(sessionStore.cancelCurrentRound).mockClear();
+  vi.unstubAllGlobals();
   sessionStore.session.value = null;
   currentPath.value = "/session/round";
   const { resetRoundState } = await import("@/ui/pages/round");
@@ -155,11 +158,84 @@ describe("RoundPage", () => {
     expect(sessionStore.recordWinner).toHaveBeenCalledWith(1, "A");
   });
 
-  it("clicking next-round calls sessionStore.nextRound", async () => {
+  it("clicking next-round calls sessionStore.nextRound (after confirm when no result yet)", async () => {
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
     sessionStore.session.value = makeSession(makeRound());
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("next-round-btn"));
     await waitFor(() => expect(sessionStore.nextRound).toHaveBeenCalled());
+  });
+
+  it("clicking next-round on a result-less latest round asks for confirmation; cancel aborts", () => {
+    const confirmFn = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirmFn);
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("next-round-btn"));
+    expect(confirmFn).toHaveBeenCalledOnce();
+    expect(sessionStore.nextRound).not.toHaveBeenCalled();
+  });
+
+  it("clicking next-round needs NO confirmation once a winner is recorded", async () => {
+    const confirmFn = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirmFn);
+    const r = makeRound();
+    r.courts[0]!.winner = "A";
+    sessionStore.session.value = makeSession(r);
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("next-round-btn"));
+    await waitFor(() => expect(sessionStore.nextRound).toHaveBeenCalled());
+    expect(confirmFn).not.toHaveBeenCalled();
+  });
+
+  it("clicking next-round needs NO confirmation when browsing back through rounds", async () => {
+    const confirmFn = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirmFn);
+    const base = makeSession(makeRound());
+    sessionStore.session.value = {
+      ...base,
+      rounds: [base.rounds[0]!, base.rounds[0]!],
+      currentRoundIndex: 0, // browsing an earlier round
+    };
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("next-round-btn"));
+    await waitFor(() => expect(sessionStore.nextRound).toHaveBeenCalled());
+    expect(confirmFn).not.toHaveBeenCalled();
+  });
+
+  it("shows このラウンドを取り消す on a result-less latest round and calls cancelCurrentRound", async () => {
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("cancel-round-btn"));
+    await waitFor(() => expect(sessionStore.cancelCurrentRound).toHaveBeenCalled());
+  });
+
+  it("hides the cancel button once a winner is recorded", () => {
+    const r = makeRound();
+    r.courts[0]!.winner = "B";
+    sessionStore.session.value = makeSession(r);
+    const { queryByTestId } = render(<RoundPage />);
+    expect(queryByTestId("cancel-round-btn")).toBeNull();
+  });
+
+  it("hides the cancel button when browsing an earlier round", () => {
+    const base = makeSession(makeRound());
+    sessionStore.session.value = {
+      ...base,
+      rounds: [base.rounds[0]!, base.rounds[0]!],
+      currentRoundIndex: 0,
+    };
+    const { queryByTestId } = render(<RoundPage />);
+    expect(queryByTestId("cancel-round-btn")).toBeNull();
+  });
+
+  it("cancel button confirm dismissal does NOT call cancelCurrentRound", () => {
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(false));
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("cancel-round-btn"));
+    expect(sessionStore.cancelCurrentRound).not.toHaveBeenCalled();
   });
 
   it("clicking 前のラウンド calls goToPreviousRound", () => {

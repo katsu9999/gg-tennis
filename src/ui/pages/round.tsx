@@ -40,9 +40,10 @@ export function RoundPage() {
 
   if (!round) {
     // Defensive: shouldn't happen if the user came from number-map.
+    // (Also reachable by cancelling round 1 — 生成する rebuilds it.)
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>R{s.currentRoundIndex + 1} を準備中…</h2>
+        <h2>R{s.rounds.length + 1} を準備中…</h2>
         <button class="btn-primary" onClick={() => { void sessionStore.nextRound(); }}>
           生成する
         </button>
@@ -62,6 +63,12 @@ export function RoundPage() {
     if (ref.kind === "member") return byMemberId.get(ref.memberId) ?? null;
     return null;
   };
+
+  // True while the cursor sits on the newest round (not browsing back).
+  const isLatestRound = s.currentRoundIndex === s.rounds.length - 1;
+  // A round with no winner on any court has no match_log rows — it can be
+  // cancelled safely and regenerated identically if needed.
+  const roundHasResult = round.courts.some((c) => c.winner === "A" || c.winner === "B");
 
   const resterLabels = round.resters.map((r) => {
     if (r.kind === "member") {
@@ -163,11 +170,51 @@ export function RoundPage() {
           class="btn-primary"
           style={{ flex: 1 }}
           data-testid="next-round-btn"
-          onClick={() => { void sessionStore.nextRound(); }}
+          onClick={() => {
+            // Guard: generating a NEW round while the current one has no
+            // recorded winner is usually a mis-tap (or the results were
+            // forgotten). Stepping forward through already-generated rounds
+            // needs no confirmation.
+            if (isLatestRound && !roundHasResult) {
+              if (!confirm(`R${s.currentRoundIndex + 1} の勝敗が未入力です。\n新しいラウンド R${s.currentRoundIndex + 2} を作りますか？`)) return;
+            }
+            void sessionStore.nextRound();
+          }}
         >
           次 <span class="a">→</span>
         </button>
       </div>
+
+      {isLatestRound && !roundHasResult && (
+        <button
+          type="button"
+          data-testid="cancel-round-btn"
+          onClick={() => {
+            const backTo = s.currentRoundIndex > 0 ? `R${s.currentRoundIndex} に戻ります` : "ラウンドがない状態に戻ります";
+            if (!confirm(`R${s.currentRoundIndex + 1} を取り消して${backTo}。\n（勝敗未入力のラウンドのみ取り消せます）`)) return;
+            sessionStore.cancelCurrentRound().catch((e) => {
+              const msg = e instanceof Error ? e.message : String(e);
+              alert(`ラウンドの取り消しに失敗しました:\n${msg}`);
+              console.error("cancelCurrentRound failed", e);
+            });
+          }}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "1.5px solid var(--line)",
+            borderRadius: 8,
+            color: "var(--muted)",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          このラウンドを取り消す
+        </button>
+      )}
 
       <button
         type="button"

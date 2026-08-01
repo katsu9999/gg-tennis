@@ -57,6 +57,11 @@ export interface SessionStore {
   startNewSession(input: StartNewSessionInput): Promise<void>;
   nextRound(): Promise<void>;
   goToPreviousRound(): void;
+  /** Delete the latest round if no winner has been recorded on it — for the
+   *  "pressed 次 but we're not actually playing this round" case. Reverts
+   *  play/rest counts and fairness weights; throws if a result exists or the
+   *  cursor isn't on the latest round. */
+  cancelCurrentRound(): Promise<void>;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
   /** Re-hydrate the in-memory session from the DB row (PWA reload / phone lock).
@@ -273,6 +278,62 @@ export function createSessionStore(deps: {
   }
 
   // ------------------------------------------------------------------
+  // cancelCurrentRound — inverse of nextRound for an unplayed round.
+  //
+  // Only the LATEST round can be cancelled (deleting a middle round would
+  // break round indices and match_log roundIndex references), and only when
+  // no court has a recorded winner (⇒ no match_log rows exist for it, since
+  // recordWinner(null) also deletes its row). Because nextRound's RNG is
+  // seeded with rngSeed + rounds.length and all inputs are reverted here,
+  // pressing 次 again after a cancel regenerates the identical round —
+  // cancelling is lossless.
+  // ------------------------------------------------------------------
+  async function cancelCurrentRound(): Promise<void> {
+    const s = session.value;
+    if (!s) throw new Error("No active session.");
+
+    const lastIndex = s.rounds.length - 1;
+    if (lastIndex < 0) return; // nothing to cancel
+    if (s.currentRoundIndex !== lastIndex) {
+      throw new Error("最新のラウンドのみ取り消せます。");
+    }
+
+    const round = s.rounds[lastIndex]!;
+    const hasResult = round.courts.some(c => c.winner === "A" || c.winner === "B");
+    if (hasResult) {
+      throw new Error("勝敗が記録されたラウンドは取り消せません。");
+    }
+
+    // 1. Revert todayStats (inverse of nextRound step 6)
+    for (const c of round.courts) {
+      for (const r of [...c.teamA, ...c.teamB]) {
+        const key = refKey(r);
+        const stats = s.todayStats.get(key);
+        if (stats) s.todayStats.set(key, { ...stats, play: Math.max(0, stats.play - 1) });
+      }
+    }
+    for (const r of round.resters) {
+      const key = refKey(r);
+      const stats = s.todayStats.get(key);
+      if (stats) s.todayStats.set(key, { ...stats, rest: Math.max(0, stats.rest - 1) });
+    }
+
+    // 2. Revert fairness weights (inverse of nextRound step 7)
+    applyRoundToHistory(history, round.courts, -1);
+    applyRoundToSameSession(sameSession, round.courts, -1);
+
+    // 3. Drop the round and step the cursor back
+    s.rounds.pop();
+    s.currentRoundIndex = s.rounds.length - 1;
+    s.prevResters = s.rounds[s.currentRoundIndex]?.resters ?? [];
+
+    session.value = { ...s };
+
+    // 4. Persist
+    await sessionRepo.upsert(toSessionRow(session.value));
+  }
+
+  // ------------------------------------------------------------------
   // recordWinner
   // ------------------------------------------------------------------
   async function recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void> {
@@ -416,5 +477,5 @@ export function createSessionStore(deps: {
     session.value = s;
   }
 
-  return { session, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, resume };
+  return { session, startNewSession, nextRound, goToPreviousRound, cancelCurrentRound, recordWinner, endSession, resume };
 }
