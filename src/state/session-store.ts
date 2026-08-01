@@ -231,9 +231,20 @@ export function createSessionStore(deps: {
       playMap.set(key, stats.play);
     }
 
-    // 3. Select resters
+    // 3. Select resters. metDegree (distinct opponents faced this session)
+    // breaks fairness ties so under-covered players stay on court — this is
+    // what pushes "everyone faces everyone" on 11-player nights.
     const rng = mulberry32(s.rngSeed + s.rounds.length);
-    const resters = selectResters(refs, plan.resters, playMap, s.prevResters, rng);
+    const metDegree = new Map<number, number>();
+    for (const [key, cnt] of sameSession.opp) {
+      if (cnt <= 0) continue;
+      const [aStr, bStr] = key.split(":");
+      const a = parseInt(aStr!, 10);
+      const b = parseInt(bStr!, 10);
+      metDegree.set(a, (metDegree.get(a) ?? 0) + 1);
+      metDegree.set(b, (metDegree.get(b) ?? 0) + 1);
+    }
+    const resters = selectResters(refs, plan.resters, playMap, s.prevResters, rng, metDegree);
     const resterSet = new Set(resters.map(refKey));
     const seated = refs.filter(r => !resterSet.has(refKey(r)));
 

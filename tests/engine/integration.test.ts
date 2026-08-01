@@ -5,6 +5,7 @@ import { buildRound } from "@/engine/round-builder";
 import { applyRoundToHistory, applyRoundToSameSession } from "@/engine/stats";
 import { mulberry32 } from "@/engine/rng";
 import type { AttendeeRef, PairHistory } from "@/engine/models";
+import { memberIdsFrom, pairKey } from "@/engine/models";
 
 const ref = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
 
@@ -81,10 +82,16 @@ describe("engine integration (full session simulation)", () => {
       for (const c of built.courts) {
         const teams = [c.teamA, c.teamB] as const;
         for (const team of teams) {
-          const a = k(team[0]!);
-          const b = k(team[1]!);
-          const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-          if (ss.partner.has(key)) partnerRepeatCount += 1;
+          // NOTE: ss.partner keys are numeric pairKey(a, b) strings — the
+          // original version of this test built JSON-based keys and therefore
+          // always counted 0 (the assertion could never fail). Fixed to use
+          // the real key format.
+          const ids = team
+            .map(t => (t.kind === "member" ? t.memberId : -1))
+            .filter(id => id > 0);
+          if (ids.length === 2) {
+            if ((ss.partner.get(pairKey(ids[0]!, ids[1]!)) ?? 0) > 0) partnerRepeatCount += 1;
+          }
         }
         for (const r of [...c.teamA, ...c.teamB]) {
           playCount.set(k(r), (playCount.get(k(r)) ?? 0) + 1);
@@ -98,6 +105,73 @@ describe("engine integration (full session simulation)", () => {
     // 5 rounds × 3 courts × 2 teams = 30 pair-events total. With perfect
     // scheduling all 30 are unique. We expect the greedy search to stay close.
     expect(partnerRepeatCount).toBeLessThan(5);
+  });
+
+  it("N=11 night: coverage-aware rester tie-break lifts opponent coverage without partner repeats", () => {
+    // Mirrors the session-store round loop, including the metDegree wiring.
+    // Baseline (no metDegree) over these seeds averages ~6.1 never-met pairs
+    // at 6 rounds; the coverage tie-break brings it down (~5.3 in a 500-trial
+    // sim). Assert the improved level so a regression is loud.
+    const k = (r: AttendeeRef) => JSON.stringify(r);
+    const runNight = (seed: number, useMetDegree: boolean) => {
+      const attendees = Array.from({ length: 11 }, (_, i) => ref(i + 1));
+      const hist: PairHistory = { partnerW: new Map(), opponentW: new Map() };
+      const ss = { partner: new Map<string, number>(), opp: new Map<string, number>() };
+      const playCount = new Map<string, number>();
+      let prevResters: AttendeeRef[] = [];
+      let partnerRepeats = 0;
+      const oppMet = new Set<string>();
+
+      for (let round = 0; round < 6; round++) {
+        const plan = planRound(11, 3, true); // 2 doubles + 1 singles, 1 rester
+        const rng = mulberry32(seed + round); // same shape as session-store
+        const metDegree = new Map<number, number>();
+        if (useMetDegree) {
+          for (const [key, cnt] of ss.opp) {
+            if (cnt <= 0) continue;
+            const [a, b] = key.split(":").map(Number);
+            metDegree.set(a!, (metDegree.get(a!) ?? 0) + 1);
+            metDegree.set(b!, (metDegree.get(b!) ?? 0) + 1);
+          }
+        }
+        const resters = selectResters(attendees, plan.resters, playCount, prevResters, rng, metDegree);
+        const seated = attendees.filter(a => !resters.some(r => k(r) === k(a)));
+        const built = buildRound(seated, plan.doublesCourts, plan.singlesCourts, hist, ss, rng);
+
+        for (const c of built.courts) {
+          const A = memberIdsFrom(c.teamA);
+          const B = memberIdsFrom(c.teamB);
+          for (const team of [A, B]) {
+            if (team.length === 2 && (ss.partner.get(pairKey(team[0]!, team[1]!)) ?? 0) > 0) {
+              partnerRepeats += 1;
+            }
+          }
+          for (const a of A) for (const b of B) oppMet.add(pairKey(a, b));
+          for (const r of [...c.teamA, ...c.teamB]) {
+            playCount.set(k(r), (playCount.get(k(r)) ?? 0) + 1);
+          }
+        }
+        applyRoundToHistory(hist, built.courts);
+        applyRoundToSameSession(ss, built.courts);
+        prevResters = resters;
+      }
+      return { unmet: 55 - oppMet.size, partnerRepeats };
+    };
+
+    const seeds = Array.from({ length: 10 }, (_, i) => 1_000_003 * (i + 1));
+    let unmetSum = 0;
+    let repeats = 0;
+    for (const s of seeds) {
+      const r = runNight(s, true);
+      unmetSum += r.unmet;
+      repeats += r.partnerRepeats;
+    }
+    const meanUnmet = unmetSum / seeds.length;
+
+    // Improved level (baseline over the same seeds is ~6.1).
+    expect(meanUnmet).toBeLessThan(6);
+    // The tie-break must not cost partner variety — that stays near-veto.
+    expect(repeats).toBe(0);
   });
 
   it("computeRankings returns empty maps when no matches fall in the window", async () => {

@@ -4,6 +4,15 @@ import type { PairHistory } from "@/engine/models";
 import type { SessionRepository, SessionRow } from "@/data/session-repository";
 import type { HistoryRepository } from "@/data/history-repository";
 import type { MatchLogRepository } from "@/data/match-log-repository";
+import { selectResters } from "@/engine/rester-selector";
+
+// Pass-through spy — behaviour identical, but calls are observable so we can
+// assert the store wires session opponent coverage (metDegree) into the
+// rester selection.
+vi.mock("@/engine/rester-selector", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/engine/rester-selector")>();
+  return { ...mod, selectResters: vi.fn(mod.selectResters) };
+});
 
 const emptyHist = (): PairHistory => ({ partnerW: new Map(), opponentW: new Map() });
 
@@ -511,5 +520,24 @@ describe("session store", () => {
     // Already at the latest persisted round → nextRound generates R3 (index 2)
     expect(store.session.value!.rounds).toHaveLength(3);
     expect(store.session.value!.currentRoundIndex).toBe(2);
+  });
+
+  it("nextRound passes session opponent coverage (metDegree) to selectResters", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput); // 8 players, 2 courts → all seated
+
+    vi.mocked(selectResters).mockClear();
+    await store.nextRound(); // R1: nobody has met anyone yet
+    let metDegree = vi.mocked(selectResters).mock.calls.at(-1)![5]!;
+    expect(metDegree).toBeInstanceOf(Map);
+    expect(metDegree.size).toBe(0);
+
+    await store.nextRound(); // R2: R1 was 2 doubles courts → everyone faced exactly 2
+    metDegree = vi.mocked(selectResters).mock.calls.at(-1)![5]!;
+    expect(metDegree.size).toBe(8);
+    for (const id of baseInput.memberIds) {
+      expect(metDegree.get(id)).toBe(2);
+    }
   });
 });
