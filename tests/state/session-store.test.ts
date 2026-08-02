@@ -24,6 +24,7 @@ function makeDeps() {
         upsertedRows.push(r);
       }),
       deleteById: vi.fn().mockResolvedValue(undefined),
+      deleteOngoing: vi.fn().mockResolvedValue(undefined),
     } satisfies SessionRepository,
     historyRepo: {
       loadPairHistory: vi.fn().mockResolvedValue(emptyHist()),
@@ -511,5 +512,94 @@ describe("session store", () => {
     // Already at the latest persisted round → nextRound generates R3 (index 2)
     expect(store.session.value!.rounds).toHaveLength(3);
     expect(store.session.value!.currentRoundIndex).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// created_at preservation + discardSession (2026-08-02: four same-day rows on
+// 2026-07-18 — created_at was rewritten on every save, and never-played
+// sessions piled up as junk 'past' rows)
+// ---------------------------------------------------------------------------
+
+describe("created_at preservation", () => {
+  it("keeps the same created_at across start, rounds, and endSession", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    const created = deps.upsertedRows[0]!.created_at;
+    expect(created).toBeTruthy();
+
+    await store.nextRound();
+    await store.recordWinner(1, "A");
+    await store.endSession();
+
+    for (const row of deps.upsertedRows) {
+      expect(row.created_at).toBe(created);
+    }
+  });
+
+  it("resume preserves the DB row's created_at on subsequent saves", async () => {
+    const deps = makeDeps();
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue({
+      id: "sess-ca",
+      status: "ongoing",
+      planned_session_id: null,
+      date: "2026-05-31",
+      location: "Hendon",
+      court_count: 2,
+      allow_singles: false,
+      attendees: [1, 2, 3, 4, 5, 6, 7, 8].map((id) => ({
+        ref: { kind: "member", memberId: id },
+        todayNumber: id,
+        isGuest: false,
+      })),
+      rounds: [],
+      today_stats: {},
+      next_today_number: 9,
+      current_round_index: -1,
+      created_at: "2026-05-31T08:00:00Z",
+      host_token: null,
+      host_label: null,
+    });
+    const store = createSessionStore(deps);
+    await store.resume();
+    await store.nextRound();
+
+    expect(deps.upsertedRows.at(-1)!.created_at).toBe("2026-05-31T08:00:00Z");
+  });
+});
+
+describe("discardSession", () => {
+  it("deletes the ongoing row and does NOT flush pair history", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    await store.nextRound();
+    const id = store.session.value!.id;
+
+    await store.discardSession();
+
+    expect(deps.sessionRepo.deleteOngoing).toHaveBeenCalledWith(id);
+    expect(deps.historyRepo.upsertPairWeights).not.toHaveBeenCalled();
+    // No ongoing→past update either — the row is gone, not archived.
+    expect(deps.sessionRepo.update).not.toHaveBeenCalled();
+    expect(store.session.value).toBeNull();
+  });
+
+  it("keeps the in-memory session when the delete is rejected", async () => {
+    const deps = makeDeps();
+    deps.sessionRepo.deleteOngoing = vi.fn().mockRejectedValue(new Error("discard_blocked"));
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+
+    await expect(store.discardSession()).rejects.toThrow("discard_blocked");
+    expect(store.session.value).not.toBeNull();
+  });
+
+  it("is a silent no-op without an active session", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.discardSession();
+    expect(deps.sessionRepo.deleteOngoing).not.toHaveBeenCalled();
   });
 });

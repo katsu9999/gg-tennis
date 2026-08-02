@@ -3,6 +3,7 @@ import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
+import { sessionHasResults } from "@/state/session-store";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
@@ -190,7 +191,27 @@ export function RoundPage() {
         type="button"
         data-testid="end-session-btn"
         onClick={async () => {
-          if (!(await appDialog.confirm(t.round.endConfirm))) return;
+          // A session with zero recorded winners is almost always a false
+          // start (lineup redo, testing). Offer to discard it so it doesn't
+          // pile up as a junk 'past' row and skew pair-history fairness —
+          // 2026-07-18 left three such rows next to the one real session.
+          const s = sessionStore.session.value;
+          if (s && !sessionHasResults(s)) {
+            if (await appDialog.confirm(t.round.discardConfirm)) {
+              try {
+                await sessionStore.discardSession();
+                navigate("/");
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                void appDialog.alert(t.round.discardFailed(msg));
+                console.error("discardSession failed", e);
+              }
+              return;
+            }
+            if (!(await appDialog.confirm(t.round.discardKeepConfirm))) return;
+          } else if (!(await appDialog.confirm(t.round.endConfirm))) {
+            return;
+          }
           try {
             await sessionStore.endSession();
             navigate("/");

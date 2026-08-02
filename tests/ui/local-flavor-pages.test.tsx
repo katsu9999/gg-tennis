@@ -84,9 +84,11 @@ function ongoingSession(): InMemorySession {
     currentRoundIndex: 0,
     todayStats: new Map(),
     prevResters: [],
+    prevSingles: [],
     rngSeed: 42,
     hostToken: null,
     hostLabel: null,
+    createdAt: "2026-05-31T08:00:00.000Z",
   };
 }
 

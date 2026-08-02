@@ -38,6 +38,11 @@ export interface SessionRepository {
   update(row: SessionRow): Promise<void>;
   /** PIN-gated deletion via delete_session RPC (cascades match_log via FK). */
   deleteById(id: string, pin: string): Promise<void>;
+  /** Delete an ongoing session outright (discard, no PIN). RLS only permits
+   *  this while status='ongoing' (migration 0010); past rows stay frozen
+   *  behind the PIN-gated RPC. Throws if nothing was deleted — RLS silently
+   *  filters unauthorized rows, and swallowing that would fake a discard. */
+  deleteOngoing(id: string): Promise<void>;
 }
 
 export function createSessionRepository(supabase: SupabaseClient): SessionRepository {
@@ -72,6 +77,19 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
       const { id, ...rest } = row;
       const { error } = await t().update(rest).eq("id", id);
       if (error) throw error;
+    },
+    async deleteOngoing(id) {
+      const { data, error } = await t()
+        .delete()
+        .eq("id", id)
+        .eq("status", "ongoing")
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          "discard_blocked: session not deleted (already ended elsewhere, or migration 0010 not applied)",
+        );
+      }
     },
     async deleteById(id, pin) {
       const { error } = await supabase.rpc("delete_session", {

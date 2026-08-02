@@ -8,6 +8,7 @@ import {
   sessionStore,
 } from "@/ui/stores";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
+import { sessionHasResults } from "@/state/session-store";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { BRAND, IS_LOCAL } from "@/flavor";
@@ -179,7 +180,15 @@ export function HomePage() {
                       // call it again defensively in case the page was opened
                       // before main.tsx's startup resume landed.
                       await sessionStore.resume();
-                      await sessionStore.endSession();
+                      // Stale sessions with zero recorded winners are almost
+                      // always abandoned false starts — offer to discard so
+                      // they don't linger as junk 'past' rows (2026-07-18).
+                      const s = sessionStore.session.value;
+                      if (s && !sessionHasResults(s) && (await appDialog.confirm(t.home.staleDiscardConfirm))) {
+                        await sessionStore.discardSession();
+                      } else {
+                        await sessionStore.endSession();
+                      }
                       await liveSessionStore.refresh();
                     } catch (e) {
                       const msg = e instanceof Error ? e.message : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));

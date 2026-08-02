@@ -59,5 +59,14 @@ export function createLocalSessionRepository(kv: KV): SessionRepository {
       await ongoing.mutateRows((rows) => rows.filter((r) => r.id !== id));
       await past.mutateRows((rows) => rows.filter((r) => r.id !== id));
     },
+    async deleteOngoing(id) {
+      // GG parity: only the ongoing copy may be discarded, and a miss throws
+      // instead of silently succeeding.
+      const rows = await ongoing.readRows();
+      if (!rows.some((r) => r.id === id)) {
+        throw new Error("discard_blocked: session is not ongoing");
+      }
+      await ongoing.mutateRows((rs) => rs.filter((r) => r.id !== id));
+    },
   };
 }

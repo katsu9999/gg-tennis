@@ -49,6 +49,11 @@ export const ja = {
     endConfirm:
       "セッションを終了してランキングに反映します。\n（間違えた場合は「過去のセッション」から削除できます）",
     endFailed: (msg: string) => `セッション終了に失敗しました:\n${msg}`,
+    discardConfirm:
+      "勝敗が1件も記録されていません。\nこのセッションを記録に残さず破棄しますか？\n（履歴・ランキング・ペア履歴に一切残りません）",
+    discardKeepConfirm:
+      "破棄せず、通常どおり終了して履歴に残しますか？",
+    discardFailed: (msg: string) => `破棄に失敗しました:\n${msg}`,
   },
   history: {
     emptyTitle: "履歴なし",
@@ -69,6 +74,8 @@ export const ja = {
     review: "確認する",
     watchOperate: "観戦・運営する →",
     endNowConfirm: "このセッションを終了してランキングに反映します。よろしいですか？",
+    staleDiscardConfirm:
+      "勝敗が1件も記録されていません。記録に残さず破棄しますか？\n（キャンセル＝履歴に残して終了）",
     endFailed: (msg: string) => `終了に失敗しました:\n${msg}`,
     endNow: "今すぐ終了",
     nextSessionHeading: "📅 次回セッション",
@@ -188,6 +195,10 @@ export const en: Strings = {
     endSession: "End session",
     endConfirm: "End this session?\n(You can delete it later from Past sessions if this was a mistake.)",
     endFailed: (msg: string) => `Failed to end the session:\n${msg}`,
+    discardConfirm:
+      "No results have been recorded.\nDiscard this session without keeping it?\n(It will not appear in history, rankings, or pairing fairness.)",
+    discardKeepConfirm: "Keep it instead — end normally and save to history?",
+    discardFailed: (msg: string) => `Failed to discard:\n${msg}`,
   },
   history: {
     emptyTitle: "No history",
@@ -208,6 +219,8 @@ export const en: Strings = {
     review: "Review",
     watchOperate: "Open session →",
     endNowConfirm: "End this session now?",
+    staleDiscardConfirm:
+      "No results were recorded. Discard without keeping it?\n(Cancel = keep in history and end)",
     endFailed: (msg: string) => `Failed to end:\n${msg}`,
     endNow: "End now",
     nextSessionHeading: "📅 Next session",
