@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   parsePayload,
   formatRoundMessage,
+  parseBookingPayload,
+  formatBookingMessage,
   type LineRoundPayload,
 } from "../../supabase/functions/line-notify/format";
 
@@ -54,17 +56,55 @@ describe("parsePayload", () => {
 });
 
 describe("formatRoundMessage", () => {
-  it("renders courts, singles marker, and resters", () => {
+  it("renders one block per court with singles marker and resters", () => {
     expect(formatRoundMessage(valid())).toBe(
-      "🎾 R3 スタート！\n" +
-        "コート1: 田中・佐藤 vs 山本・鈴木\n" +
-        "コート2: 高橋 vs 渡辺（シングルス）\n" +
-        "休憩: 高田",
+      "🎾 R3 スタート！\n\n" +
+        "▶ コート1\n田中・佐藤 vs 山本・鈴木\n\n" +
+        "▶ コート2（シングルス）\n高橋 vs 渡辺\n\n" +
+        "💤 休憩：高田",
     );
   });
 
   it("omits the rest line when nobody rests", () => {
     const p = { ...valid(), resters: [] };
     expect(formatRoundMessage(p)).not.toContain("休憩");
+  });
+});
+
+describe("booking payload", () => {
+  const booking = () => ({
+    kind: "booking",
+    date: "8/7（金）",
+    start: "19:00",
+    end: "20:00",
+    court: "コート3",
+    account: "Katsu",
+    gatePin: "1234",
+  });
+
+  it("parses a valid booking and renders line-per-field", () => {
+    const p = parseBookingPayload(booking())!;
+    expect(p).not.toBeNull();
+    expect(formatBookingMessage(p)).toBe(
+      "✅ コート予約完了！\n\n" +
+        "📅 8/7（金）\n" +
+        "⏰ 19:00〜20:00\n" +
+        "🎾 コート3\n" +
+        "👤 予約アカウント：Katsu\n" +
+        "🔑 ゲート：1234",
+    );
+  });
+
+  it("gatePin is optional; missing required fields reject", () => {
+    const { gatePin: _pin, ...noPin } = booking();
+    const p = parseBookingPayload(noPin)!;
+    expect(p.gatePin).toBeUndefined();
+    expect(formatBookingMessage(p)).not.toContain("ゲート");
+    expect(parseBookingPayload({ ...booking(), court: "" })).toBeNull();
+    expect(parseBookingPayload({ ...booking(), kind: "round" })).toBeNull();
+  });
+
+  it("round payloads without kind are not misparsed as bookings", () => {
+    expect(parseBookingPayload(valid())).toBeNull();
   });
 });

@@ -73,21 +73,94 @@ export function parsePayload(body: unknown): LineRoundPayload | null {
   return { roundNo, courts, resters: resters as string[] };
 }
 
-/** Render the group message, e.g.
+/** Render the round message with one block per court:
  *
  *   🎾 R3 スタート！
- *   コート1: 田中・佐藤 vs 山本・鈴木
- *   コート2: 高橋 vs 渡辺（シングルス）
- *   休憩: 高田
+ *
+ *   ▶ コート1
+ *   ①田中・②佐藤 vs ③山本・④鈴木
+ *
+ *   ▶ コート2（シングルス）
+ *   ⑤高橋 vs ⑥渡辺
+ *
+ *   💤 休憩：⑦高田
  */
 export function formatRoundMessage(p: LineRoundPayload): string {
-  const lines: string[] = [`🎾 R${p.roundNo} スタート！`];
+  const blocks: string[] = [`🎾 R${p.roundNo} スタート！`];
   for (const c of p.courts) {
     const suffix = c.type === "singles" ? "（シングルス）" : "";
-    lines.push(`コート${c.number}: ${c.teamA.join("・")} vs ${c.teamB.join("・")}${suffix}`);
+    blocks.push(`▶ コート${c.number}${suffix}\n${c.teamA.join("・")} vs ${c.teamB.join("・")}`);
   }
   if (p.resters.length > 0) {
-    lines.push(`休憩: ${p.resters.join("・")}`);
+    blocks.push(`💤 休憩：${p.resters.join("・")}`);
   }
+  return blocks.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Booking result (GG Booker → LINE)
+// ---------------------------------------------------------------------------
+
+export interface LineBookingPayload {
+  kind: "booking";
+  /** e.g. "8/7（金）" — display string, built by the caller. */
+  date: string;
+  /** e.g. "19:00" / "20:00" */
+  start: string;
+  end: string;
+  /** e.g. "コート3" */
+  court: string;
+  /** Which account made the booking, e.g. "Katsu" */
+  account: string;
+  /** Optional gate code for the venue entrance. */
+  gatePin?: string;
+}
+
+function cleanField(raw: unknown, maxLen: number): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  if (s.length === 0 || s.length > maxLen) return null;
+  return s;
+}
+
+export function parseBookingPayload(body: unknown): LineBookingPayload | null {
+  if (typeof body !== "object" || body === null) return null;
+  const b = body as Record<string, unknown>;
+  if (b.kind !== "booking") return null;
+  const date = cleanField(b.date, 40);
+  const start = cleanField(b.start, 10);
+  const end = cleanField(b.end, 10);
+  const court = cleanField(b.court, 30);
+  const account = cleanField(b.account, 30);
+  if (!date || !start || !end || !court || !account) return null;
+  const payload: LineBookingPayload = { kind: "booking", date, start, end, court, account };
+  if (b.gatePin !== undefined) {
+    const pin = cleanField(b.gatePin, 12);
+    if (!pin) return null;
+    payload.gatePin = pin;
+  }
+  return payload;
+}
+
+/** Render the booking confirmation:
+ *
+ *   ✅ コート予約完了！
+ *
+ *   📅 8/7（金）
+ *   ⏰ 19:00〜20:00
+ *   🎾 コート3
+ *   👤 予約アカウント：Katsu
+ *   🔑 ゲート：1234
+ */
+export function formatBookingMessage(p: LineBookingPayload): string {
+  const lines = [
+    "✅ コート予約完了！",
+    "",
+    `📅 ${p.date}`,
+    `⏰ ${p.start}〜${p.end}`,
+    `🎾 ${p.court}`,
+    `👤 予約アカウント：${p.account}`,
+  ];
+  if (p.gatePin) lines.push(`🔑 ゲート：${p.gatePin}`);
   return lines.join("\n");
 }
