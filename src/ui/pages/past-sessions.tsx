@@ -8,6 +8,8 @@ import { CourtView } from "@/ui/components/court-view";
 import { linkTo } from "@/ui/router";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
+import { IS_LOCAL } from "@/flavor";
 
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
@@ -135,7 +137,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
     gate(async () => {
       const pin = pinStore.getPin();
       if (!pin) {
-        void appDialog.alert("PIN が取得できませんでした");
+        void appDialog.alert(t.past.pinUnavailable);
         return;
       }
       try {
@@ -146,7 +148,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         void rankingStore.load();
       } catch (e) {
         console.error("update past winner failed", e);
-        void appDialog.alert(`勝敗の更新に失敗しました:\n${formatError(e)}`);
+        void appDialog.alert(t.past.updateWinnerFailed(formatError(e)));
       }
     });
   }
@@ -155,7 +157,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
     gate(async () => {
       const pin = pinStore.getPin();
       if (!pin) {
-        void appDialog.alert("PIN が取得できませんでした");
+        void appDialog.alert(t.past.pinUnavailable);
         return;
       }
       busy.value = true;
@@ -169,7 +171,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         void rankingStore.load();
       } catch (e) {
         console.error("delete session failed", e);
-        void appDialog.alert(`セッション削除に失敗しました:\n${formatError(e)}`);
+        void appDialog.alert(t.past.deleteFailed(formatError(e)));
       } finally {
         busy.value = false;
       }
@@ -194,14 +196,14 @@ function SessionDetail({ session }: { session: SessionRow }) {
             cursor: "pointer",
           }}
         >
-          ← 一覧へ
+          {t.past.backToList}
         </button>
         <button
           type="button"
           data-testid="past-delete"
           disabled={busy.value}
           onClick={async () => {
-            if (!(await appDialog.confirm("このセッションを削除します。\n試合結果もランキングから除かれます。\nよろしいですか？"))) return;
+            if (!(await appDialog.confirm(t.past.deleteConfirm))) return;
             handleDelete();
           }}
           style={{
@@ -215,7 +217,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
             cursor: busy.value ? "not-allowed" : "pointer",
           }}
         >
-          {busy.value ? "削除中…" : "🗑 削除"}
+          {busy.value ? t.past.deleting : t.past.deleteBtn}
         </button>
       </div>
 
@@ -223,7 +225,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         {session.date} @ {session.location}
       </h2>
       <p class="muted" style={{ fontSize: 13, margin: "4px 0" }}>
-        {attendees.length}人 · {session.court_count}コート · {rounds.length}ラウンド
+        {t.past.meta(attendees.length, session.court_count, rounds.length)}
       </p>
 
       <label style={{ display: "block", margin: "8px 0", fontWeight: 700, fontSize: 13 }}>
@@ -233,7 +235,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
           checked={showNames.value}
           onInput={(e) => { showNames.value = (e.currentTarget as HTMLInputElement).checked; }}
         />
-        {" "}名前で表示
+        {" "}{t.common.showNames}
       </label>
 
       {rounds.map((round) => (
@@ -246,6 +248,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
               todayNumbers={todayNumbers}
               nameFor={nameFor}
               showNames={showNames.value}
+              winnerTapEnabled={!IS_LOCAL}
               onSetWinner={(w) => { void handleSetWinner(round.index, c.number, w); }}
             />
           ))}
@@ -267,12 +270,12 @@ export function PastSessionsPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>過去セッション</h2>
+      <h2 style={{ marginTop: 0 }}>{t.past.title}</h2>
 
-      {loading.value && <p class="muted" data-testid="past-loading">読み込み中…</p>}
+      {loading.value && <p class="muted" data-testid="past-loading">{t.past.loading}</p>}
 
       {!loading.value && list.value.length === 0 && (
-        <p class="muted">まだ過去セッションがありません。</p>
+        <p class="muted">{t.past.empty}</p>
       )}
 
       {list.value.map((s) => (
@@ -294,13 +297,13 @@ export function PastSessionsPage() {
             <span class="muted">@ {s.location}</span>
           </span>
           <span class="muted" style={{ fontSize: 13 }}>
-            {(s.attendees as unknown[]).length}人 · {(s.rounds as unknown[]).length}R
+            {t.past.listMeta((s.attendees as unknown[]).length, (s.rounds as unknown[]).length)}
           </span>
         </div>
       ))}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
     </main>
   );

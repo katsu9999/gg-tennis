@@ -30,14 +30,21 @@ export interface InMemorySession {
   attendees: { ref: AttendeeRef; todayNumber: number; isGuest: boolean; guestName?: string }[];
   rounds: Round[];
   currentRoundIndex: number;
-  /** Per-attendee play/rest counts keyed by JSON.stringify(ref). */
-  todayStats: Map<string, { play: number; rest: number }>;
+  /** Per-attendee play/rest/singles counts keyed by JSON.stringify(ref). */
+  todayStats: Map<string, { play: number; rest: number; singles: number }>;
   prevResters: AttendeeRef[];
+  /** Attendees who played singles in the current round — feeds singles-fairness. */
+  prevSingles: AttendeeRef[];
   rngSeed: number;
   /** v1.1 Model A: LocalStorage token of whoever started the session. */
   hostToken: string | null;
   /** v1.1 Model A: display label for the host. */
   hostLabel: string | null;
+  /** ISO timestamp of when the session was started. Set once at
+   *  startNewSession and preserved across saves/resume — every save used to
+   *  stamp created_at with "now", which destroyed the session timeline
+   *  (2026-07-18: four same-day rows, none with a truthful start time). */
+  createdAt: string;
 }
 
 export interface StartNewSessionInput {
@@ -62,6 +69,12 @@ export interface SessionStore {
   goToPreviousRound(): void;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
+  /** Delete the ongoing session without keeping it in history and without
+   *  flushing pair-history weights. For sessions that were started but never
+   *  actually played (no winner recorded) — keeping those as 'past' rows
+   *  pollutes the session list and skews fairness weights with pairings that
+   *  never happened on court. */
+  discardSession(): Promise<void>;
   /** Re-hydrate the in-memory session from the DB row (PWA reload / phone lock).
    *  No-op if a session is already loaded. */
   resume(): Promise<void>;
@@ -95,7 +108,7 @@ function toSessionRow(s: InMemorySession): SessionRow {
     today_stats,
     next_today_number: s.attendees.length + 1,
     current_round_index: s.currentRoundIndex,
-    created_at: new Date().toISOString(),
+    created_at: s.createdAt,
     host_token: s.hostToken,
     host_label: s.hostLabel,
   };
@@ -160,9 +173,9 @@ export function createSessionStore(deps: {
     }));
 
     // 3. Initialise todayStats
-    const todayStats = new Map<string, { play: number; rest: number }>();
+    const todayStats = new Map<string, { play: number; rest: number; singles: number }>();
     for (const a of attendees) {
-      todayStats.set(refKey(a.ref), { play: 0, rest: 0 });
+      todayStats.set(refKey(a.ref), { play: 0, rest: 0, singles: 0 });
     }
 
     // 4. Build in-memory session
@@ -179,9 +192,11 @@ export function createSessionStore(deps: {
       currentRoundIndex: -1,
       todayStats,
       prevResters: [],
+      prevSingles: [],
       rngSeed: deriveRngSeed(input.date),
       hostToken: input.hostToken ?? null,
       hostLabel: input.hostLabel ?? null,
+      createdAt: new Date().toISOString(),
     };
 
     session.value = s;
@@ -237,7 +252,14 @@ export function createSessionStore(deps: {
     const resterSet = new Set(resters.map(refKey));
     const seated = refs.filter(r => !resterSet.has(refKey(r)));
 
-    // 4. Build courts
+    // 4. Build courts. Feed per-player singles counts + who played singles last
+    // round so the builder rotates singles fairly (nobody gets it twice before
+    // everyone's had a turn, and no back-to-back singles).
+    const singlesCount = new Map<string, number>();
+    for (const [key, stats] of s.todayStats) {
+      singlesCount.set(key, stats.singles);
+    }
+    const prevSinglesSet = new Set(s.prevSingles.map(refKey));
     const { courts } = buildRound(
       seated,
       plan.doublesCourts,
@@ -245,23 +267,28 @@ export function createSessionStore(deps: {
       history,
       sameSession,
       rng,
+      singlesCount,
+      prevSinglesSet,
     );
 
     // 5. Assemble Round
     const roundIndex = s.rounds.length;
     const round: Round = { index: roundIndex, courts, resters };
 
-    // 6. Update todayStats
+    // 6. Update todayStats (play/singles per court, rest for benched players).
+    const singlesPlayers: AttendeeRef[] = [];
     for (const c of courts) {
       for (const r of [...c.teamA, ...c.teamB]) {
         const key = refKey(r);
-        const stats = s.todayStats.get(key) ?? { play: 0, rest: 0 };
-        s.todayStats.set(key, { ...stats, play: stats.play + 1 });
+        const stats = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
+        const bumpSingles = c.type === "singles" ? 1 : 0;
+        if (bumpSingles) singlesPlayers.push(r);
+        s.todayStats.set(key, { ...stats, play: stats.play + 1, singles: stats.singles + bumpSingles });
       }
     }
     for (const r of resters) {
       const key = refKey(r);
-      const stats = s.todayStats.get(key) ?? { play: 0, rest: 0 };
+      const stats = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
       s.todayStats.set(key, { ...stats, rest: stats.rest + 1 });
     }
 
@@ -273,6 +300,7 @@ export function createSessionStore(deps: {
     s.rounds.push(round);
     s.currentRoundIndex = roundIndex;
     s.prevResters = resters;
+    s.prevSingles = singlesPlayers;
 
     // Trigger signal reactivity by reassigning. Note: this is a shallow spread —
     // `rounds`/`todayStats` are the same references as before the mutations above.
@@ -385,6 +413,22 @@ export function createSessionStore(deps: {
   }
 
   // ------------------------------------------------------------------
+  // discardSession
+  // ------------------------------------------------------------------
+  async function discardSession(): Promise<void> {
+    const s = session.value;
+    if (!s) return; // silent no-op, mirroring endSession
+
+    // Delete first: if the DB rejects (RLS, already ended elsewhere), keep
+    // the in-memory session so the operator can still end it normally.
+    await sessionRepo.deleteOngoing(s.id);
+
+    // In-memory pair-history mutations from the discarded rounds die with the
+    // closure: startNewSession/resume both reload history from the repo.
+    session.value = null;
+  }
+
+  // ------------------------------------------------------------------
   // resume — re-hydrate from DB after a reload (browser tab lifecycle,
   // phone lock killing the PWA, etc). Without this, sessionStore.session
   // stays null after reload even though `sessions` has an ongoing row,
@@ -411,17 +455,23 @@ export function createSessionStore(deps: {
       applyRoundToHistory(history, r.courts);
     }
 
-    // today_stats was serialised as a plain Record; rebuild the Map.
-    const todayStats = new Map<string, { play: number; rest: number }>();
+    // today_stats was serialised as a plain Record; rebuild the Map. Rows
+    // persisted before singles-fairness lack `singles` — default it to 0.
+    const todayStats = new Map<string, { play: number; rest: number; singles: number }>();
     for (const [key, val] of Object.entries(row.today_stats ?? {})) {
-      todayStats.set(key, val as { play: number; rest: number });
+      const v = val as { play: number; rest: number; singles?: number };
+      todayStats.set(key, { play: v.play, rest: v.rest, singles: v.singles ?? 0 });
     }
 
     // prevResters comes from whatever round is current — used by the
     // rester-selector so the same people don't sit out twice in a row.
+    // prevSingles likewise feeds the singles-fairness rotation.
     const currentIdx = row.current_round_index;
     const lastRound = currentIdx >= 0 ? rounds[currentIdx] : undefined;
     const prevResters = lastRound?.resters ?? [];
+    const prevSingles = (lastRound?.courts ?? [])
+      .filter(c => c.type === "singles")
+      .flatMap(c => [...c.teamA, ...c.teamB]);
 
     const date = new Date(row.date);
     const s: InMemorySession = {
@@ -437,13 +487,22 @@ export function createSessionStore(deps: {
       currentRoundIndex: currentIdx,
       todayStats,
       prevResters,
+      prevSingles,
       rngSeed: deriveRngSeed(date),
       hostToken: row.host_token ?? null,
       hostLabel: row.host_label ?? null,
+      createdAt: row.created_at,
     };
 
     session.value = s;
   }
 
-  return { session, generating, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, resume };
+  return { session, generating, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, discardSession, resume };
+}
+
+/** True when at least one court in any round has a recorded winner. Used by
+ *  the end-session UIs to offer discarding never-played sessions instead of
+ *  keeping them as junk 'past' rows. */
+export function sessionHasResults(s: InMemorySession): boolean {
+  return s.rounds.some(r => r.courts.some(c => c.winner === "A" || c.winner === "B"));
 }

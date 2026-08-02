@@ -82,9 +82,11 @@ describe("NumberMapPage", () => {
       currentRoundIndex: -1,
       todayStats: new Map(),
       prevResters: [],
+    prevSingles: [],
       rngSeed: 0,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("1")).toBeDefined();
@@ -107,9 +109,11 @@ describe("NumberMapPage", () => {
       currentRoundIndex: -1,
       todayStats: new Map(),
       prevResters: [],
+    prevSingles: [],
       rngSeed: 0,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("#99")).toBeDefined();
@@ -129,9 +133,11 @@ describe("NumberMapPage", () => {
       currentRoundIndex: -1,
       todayStats: new Map(),
       prevResters: [],
+    prevSingles: [],
       rngSeed: 0,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
     };
     const { getByText } = render(<NumberMapPage />);
     fireEvent.click(getByText(/ラウンド開始/));
@@ -155,9 +161,11 @@ describe("NumberMapPage", () => {
       currentRoundIndex: -1,
       todayStats: new Map(),
       prevResters: [],
+    prevSingles: [],
       rngSeed: 0,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
     };
     const { getByText } = render(<NumberMapPage />);
     fireEvent.click(getByText(/ラウンド開始/));
@@ -181,9 +189,11 @@ describe("NumberMapPage", () => {
       currentRoundIndex: -1,
       todayStats: new Map(),
       prevResters: [],
+    prevSingles: [],
       rngSeed: 0,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
     };
     sessionStore.generating.value = true;
     const { getByText } = render(<NumberMapPage />);

@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { navigate, linkTo } from "@/ui/router";
+import { t } from "@/ui/i18n";
 import {
   rosterStore,
   sessionStore,
@@ -124,7 +125,7 @@ export function NewSessionPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>新規セッション</h2>
+      <h2 style={{ marginTop: 0 }}>{t.newSession.title}</h2>
 
       {plannedSessionId.value && (
         <div
@@ -138,13 +139,13 @@ export function NewSessionPage() {
             fontSize: 14,
           }}
         >
-          📅 予定から読み込みました。内容を確認して開始してください。
+          {t.newSession.loadedFromPlan}
         </div>
       )}
 
       <section class="card" style={{ marginBottom: 12 }}>
         <label style={{ display: "block", marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>日付</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{t.newSession.date}</div>
           <input
             type="date"
             value={date.value}
@@ -154,12 +155,12 @@ export function NewSessionPage() {
         </label>
 
         <label style={{ display: "block", marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>会場</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{t.newSession.venue}</div>
           <input
             type="text"
             list="venues-list"
             value={location.value}
-            placeholder="例: Golders Hill"
+            placeholder={t.newSession.venuePlaceholder}
             onInput={(e) => { location.value = (e.currentTarget as HTMLInputElement).value; }}
             style={{ padding: 10, fontSize: 16, borderRadius: 8, border: "2px solid var(--line)", width: "100%" }}
           />
@@ -169,7 +170,7 @@ export function NewSessionPage() {
         </label>
 
         <label style={{ display: "block", marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>コート数 (1-6)</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>{t.newSession.courtCount}</div>
           <input
             type="number"
             min={1}
@@ -189,14 +190,14 @@ export function NewSessionPage() {
             checked={allowSingles.value}
             onInput={(e) => { allowSingles.value = (e.currentTarget as HTMLInputElement).checked; }}
           />
-          {" "}シングルス許可
+          {" "}{t.newSession.allowSingles}
         </label>
       </section>
 
       <section class="card" style={{ marginBottom: 12 }}>
-        <h3 style={{ marginTop: 0 }}>出席を選ぶ</h3>
+        <h3 style={{ marginTop: 0 }}>{t.newSession.chooseAttendees}</h3>
         {rosterStore.active.value.length === 0 ? (
-          <p class="muted">名簿にアクティブ会員がいません。<a href={linkTo("/roster")}>名簿を追加</a></p>
+          <p class="muted">{t.newSession.noActiveMembers}<a href={linkTo("/roster")}>{t.newSession.addToRoster}</a></p>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
             {rosterStore.active.value.map((m) => {
@@ -224,7 +225,7 @@ export function NewSessionPage() {
             })}
           </div>
         )}
-        <p class="muted" style={{ margin: "12px 0 0" }}>選択: {selected.value.size} 人</p>
+        <p class="muted" style={{ margin: "12px 0 0" }}>{t.newSession.selectedCount(selected.value.size)}</p>
       </section>
 
       {error.value && <p style={{ color: "crimson" }}>{error.value}</p>}
@@ -236,7 +237,7 @@ export function NewSessionPage() {
         disabled={!canSubmit}
         onClick={() => { void submit(); }}
       >
-        次へ：番号を抽選 <span class="a">→</span>
+        {t.newSession.nextDrawNumbers} <span class="a">→</span>
       </button>
     </main>
   );

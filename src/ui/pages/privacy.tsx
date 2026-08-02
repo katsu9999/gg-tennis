@@ -1,7 +1,8 @@
 import { signal } from "@preact/signals";
-import { PRIVACY_JA, PRIVACY_EN } from "@/ui/privacy-content";
+import { PRIVACY_JA, PRIVACY_EN, PRIVACY_LOCAL_EN } from "@/ui/privacy-content";
 import type { ComponentChildren } from "preact";
 import { linkTo } from "@/ui/router";
+import { BRAND, IS_LOCAL } from "@/flavor";
 
 const lang = signal<"ja" | "en">("ja");
 
@@ -58,11 +59,11 @@ export function PrivacyPage() {
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 20 }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 16 }}>
-        <strong style={{ fontSize: 28 }}>GG</strong>
-        <span class="muted">プライバシー / Privacy</span>
+        <strong style={{ fontSize: 28 }}>{BRAND}</strong>
+        <span class="muted">{IS_LOCAL ? "Privacy" : "プライバシー / Privacy"}</span>
       </header>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      {!IS_LOCAL && <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
           type="button"
           data-testid="lang-ja"
@@ -97,10 +98,10 @@ export function PrivacyPage() {
         >
           English
         </button>
-      </div>
+      </div>}
 
       <article class="card" data-testid="privacy-body">
-        {renderMarkdown(lang.value === "ja" ? PRIVACY_JA : PRIVACY_EN)}
+        {renderMarkdown(IS_LOCAL ? PRIVACY_LOCAL_EN : lang.value === "ja" ? PRIVACY_JA : PRIVACY_EN)}
       </article>
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>

@@ -2,6 +2,7 @@ import { useEffect } from "preact/hooks";
 import { navigate, linkTo } from "@/ui/router";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
 import type { InMemorySession } from "@/state/session-store";
 
 export function NumberMapPage() {
@@ -15,8 +16,8 @@ export function NumberMapPage() {
   if (!s) {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>セッションが開始されていません</h2>
-        <p><a href={linkTo("/session/new")}>新規セッションを作成</a></p>
+        <h2>{t.common.noSessionTitle}</h2>
+        <p><a href={linkTo("/session/new")}>{t.common.createNewSession}</a></p>
       </main>
     );
   }
@@ -36,14 +37,14 @@ export function NumberMapPage() {
       .catch((e) => {
         console.error("startFirstRound failed", e);
         const msg = e instanceof Error ? e.message : String(e);
-        void appDialog.alert(`ラウンドの生成・保存に失敗しました:\n${msg}\n電波を確認してもう一度お試しください。`);
+        void appDialog.alert(t.numberMap.generateFailed(msg));
       });
   }
 
   return (
     <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>名前 → 今日の番号</h2>
-      <p class="muted">全員、自分の番号を確認してください。</p>
+      <h2 style={{ marginTop: 0 }}>{t.numberMap.title}</h2>
+      <p class="muted">{t.numberMap.checkYourNumber}</p>
 
       <div class="card" data-testid="number-map-list">
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -77,7 +78,7 @@ export function NumberMapPage() {
           disabled={sessionStore.generating.value}
           onClick={() => { startFirstRound(); }}
         >
-          ラウンド開始 <span class="a">→</span>
+          {t.numberMap.startRound} <span class="a">→</span>
         </button>
       </div>
     </main>

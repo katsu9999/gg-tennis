@@ -36,6 +36,7 @@ vi.mock("@/ui/stores", async () => {
       goToPreviousRound: vi.fn(),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
+      discardSession: vi.fn().mockResolvedValue(undefined),
       resume: vi.fn().mockResolvedValue(undefined),
     },
   };
@@ -88,9 +89,11 @@ function makeSession(round: Round, resters: { kind: "member"; memberId: number }
     currentRoundIndex: 0,
     todayStats: new Map(),
     prevResters: [],
+    prevSingles: [],
     rngSeed: 1,
       hostToken: null,
       hostLabel: null,
+      createdAt: "2026-05-31T08:00:00.000Z",
   };
 }
 
@@ -99,6 +102,7 @@ beforeEach(async () => {
   vi.mocked(sessionStore.nextRound).mockClear();
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
   vi.mocked(sessionStore.endSession).mockClear();
+  vi.mocked(sessionStore.discardSession).mockClear();
   sessionStore.session.value = null;
   sessionStore.generating.value = false;
   currentPath.value = "/session/round";
@@ -170,11 +174,14 @@ describe("RoundPage", () => {
     // window.confirm can be silently suppressed in iOS standalone PWAs, which
     // made this button appear dead on iPhone — the in-app dialog must be used.
     const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
-    sessionStore.session.value = makeSession(makeRound());
+    const round = makeRound();
+    round.courts[0]!.winner = "A"; // has a result → normal end path
+    sessionStore.session.value = makeSession(round);
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("end-session-btn"));
     await waitFor(() => expect(sessionStore.endSession).toHaveBeenCalled());
     expect(confirmSpy).toHaveBeenCalled();
+    expect(sessionStore.discardSession).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
 
@@ -185,6 +192,31 @@ describe("RoundPage", () => {
     fireEvent.click(getByTestId("end-session-btn"));
     await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
     expect(sessionStore.endSession).not.toHaveBeenCalled();
+    expect(sessionStore.discardSession).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("セッション終了 with zero recorded winners offers discard and discards on OK", async () => {
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    sessionStore.session.value = makeSession(makeRound()); // all winners "none"
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("end-session-btn"));
+    await waitFor(() => expect(sessionStore.discardSession).toHaveBeenCalled());
+    expect(sessionStore.endSession).not.toHaveBeenCalled();
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/破棄しますか/);
+    confirmSpy.mockRestore();
+  });
+
+  it("セッション終了 with zero winners: declining discard still allows a normal end", async () => {
+    const confirmSpy = vi
+      .spyOn(appDialog, "confirm")
+      .mockResolvedValueOnce(false) // 破棄しない
+      .mockResolvedValueOnce(true); // 通常終了で残す
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("end-session-btn"));
+    await waitFor(() => expect(sessionStore.endSession).toHaveBeenCalled());
+    expect(sessionStore.discardSession).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
 

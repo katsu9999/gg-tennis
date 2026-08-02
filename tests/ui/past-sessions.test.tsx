@@ -26,6 +26,7 @@ vi.mock("@/ui/stores", async () => {
       upsert: vi.fn(),
       update: vi.fn(),
       deleteById: vi.fn(),
+      deleteOngoing: vi.fn(),
     },
     matchLogRepo: {
       list: vi.fn().mockResolvedValue([]),

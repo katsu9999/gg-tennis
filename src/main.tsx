@@ -11,6 +11,12 @@ import "@/ui/theme.css";
 // the operator loses today's match.
 void sessionStore.resume();
 
+// Android hardware back button (Capacitor shell). IS_LOCAL is a build-time
+// constant, so the GG bundle drops both the branch and the chunk.
+if (IS_LOCAL) {
+  void import("@/native/back-button").then((m) => m.registerAndroidBackButton());
+}
+
 // Phase 4+ pages — added incrementally
 import { AppDialogHost } from "@/ui/components/app-dialog";
 import { HomePage } from "@/ui/pages/home";
@@ -25,6 +31,8 @@ import { RankingPage } from "@/ui/pages/ranking";
 import { PastSessionsPage } from "@/ui/pages/past-sessions";
 import { PrivacyPage } from "@/ui/pages/privacy";
 import { SettingsPage } from "@/ui/pages/settings";
+import { SettingsLocalPage } from "@/ui/pages/settings-local";
+import { IS_LOCAL } from "@/flavor";
 
 const route = computed(() => matchRoute(currentPath.value));
 
@@ -61,7 +69,7 @@ function CurrentPage() {
     case "ranking": return <RankingPage />;
     case "past-sessions": return <PastSessionsPage />;
     case "privacy": return <PrivacyPage />;
-    case "settings": return <SettingsPage />;
+    case "settings": return IS_LOCAL ? <SettingsLocalPage /> : <SettingsPage />;
     default:
       return <ComingSoon name={(r as { name: string }).name} />;
   }

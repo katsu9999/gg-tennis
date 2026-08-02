@@ -12,3 +12,4 @@ coverage/
 .superpowers/
 *.tsbuildinfo
 public/icons/*.png
+dist-local/

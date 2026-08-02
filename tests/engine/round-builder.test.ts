@@ -44,6 +44,40 @@ describe("buildRound (§6.3)", () => {
     expect(a).toEqual(b);
   });
 
+  it("avoids putting a high singles-count player on the singles court", () => {
+    // 6 seated → 1 doubles (4) + 1 singles (2). Players 1 & 2 have already
+    // played singles a lot today; the fair choice keeps them off singles.
+    const seated = [1, 2, 3, 4, 5, 6].map(ref);
+    const singlesCount = new Map<string, number>([
+      [JSON.stringify(ref(1)), 3],
+      [JSON.stringify(ref(2)), 3],
+    ]);
+    const r = buildRound(
+      seated, 1, 1, emptyHist(), { partner: new Map(), opp: new Map() },
+      mulberry32(7), singlesCount, new Set(),
+    );
+    const singlesCourt = r.courts.find(c => c.type === "singles")!;
+    const onSingles = [...singlesCourt.teamA, ...singlesCourt.teamB]
+      .map(x => (x.kind === "member" ? x.memberId : -1));
+    expect(onSingles).not.toContain(1);
+    expect(onSingles).not.toContain(2);
+  });
+
+  it("avoids back-to-back singles for the same player", () => {
+    // All equal singles counts, but players 3 & 4 played singles last round.
+    const seated = [1, 2, 3, 4, 5, 6].map(ref);
+    const prevSingles = new Set<string>([JSON.stringify(ref(3)), JSON.stringify(ref(4))]);
+    const r = buildRound(
+      seated, 1, 1, emptyHist(), { partner: new Map(), opp: new Map() },
+      mulberry32(3), new Map(), prevSingles,
+    );
+    const singlesCourt = r.courts.find(c => c.type === "singles")!;
+    const onSingles = [...singlesCourt.teamA, ...singlesCourt.teamB]
+      .map(x => (x.kind === "member" ? x.memberId : -1));
+    expect(onSingles).not.toContain(3);
+    expect(onSingles).not.toContain(4);
+  });
+
   it("scoreCourts returns 0 with no history", () => {
     const seated = [1, 2, 3, 4].map(ref);
     const r = buildRound(seated, 1, 0, emptyHist(), { partner: new Map(), opp: new Map() }, mulberry32(5));

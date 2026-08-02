@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { FLAVOR, type Flavor } from "@/flavor";
 
 // Strip the Vite base path so route matching always works against bare paths
 // regardless of whether the app is hosted at "/" or at "/gg-tennis-shuffle/".
@@ -26,7 +27,26 @@ export type Route =
 
 const PUBLIC_RSVP_PATTERN = /^\/rsvp\/([A-Za-z0-9_-]+)$/;
 
+// Server-only pages: planned sessions / public RSVP need a shared DB, the
+// ranking page needs the match log — all absent in the device-local flavour.
+const LOCAL_EXCLUDED: ReadonlySet<Route["name"]> = new Set([
+  "planned-sessions",
+  "public-rsvp",
+  "ranking",
+]);
+
+/** Flavour-explicit variant, exported for tests. App code uses matchRoute. */
+export function matchRouteFor(path: string, flavor: Flavor): Route {
+  const route = matchAnyFlavor(path);
+  if (flavor === "local" && LOCAL_EXCLUDED.has(route.name)) return { name: "home" };
+  return route;
+}
+
 export function matchRoute(path: string): Route {
+  return matchRouteFor(path, FLAVOR);
+}
+
+function matchAnyFlavor(path: string): Route {
   if (path === "/" || path === "") return { name: "home" };
   if (path === "/roster") return { name: "roster" };
   if (path === "/planned") return { name: "planned-sessions" };

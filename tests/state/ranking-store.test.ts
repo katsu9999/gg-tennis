@@ -60,6 +60,7 @@ function makeRepos(
       upsert: vi.fn(),
       update: vi.fn(),
       deleteById: vi.fn(),
+      deleteOngoing: vi.fn(),
     },
   };
 }

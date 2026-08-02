@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import type { AttendeeRef, Court } from "@/engine/models";
+import { t } from "@/ui/i18n";
 
 export interface CourtViewProps {
   court: Court;
@@ -9,6 +10,9 @@ export interface CourtViewProps {
   nameFor: (ref: AttendeeRef) => string | null;
   onSetWinner: (winner: "A" | "B" | null) => void;
   showNames?: boolean;
+  /** When false, team sides render as plain display (no winner taps).
+   *  The local flavour cuts winner recording entirely. Default true. */
+  winnerTapEnabled?: boolean;
 }
 
 function refLabel(
@@ -29,9 +33,12 @@ function refLabel(
 }
 
 export function CourtView(props: CourtViewProps) {
-  const { court, todayNumbers, nameFor, onSetWinner, showNames } = props;
+  const { court, todayNumbers, nameFor, onSetWinner, showNames, winnerTapEnabled = true } = props;
   const winA = court.winner === "A";
   const winB = court.winner === "B";
+  const tap = (winner: "A" | "B" | null) => {
+    if (winnerTapEnabled) onSetWinner(winner);
+  };
 
   const sideStyleBase: JSX.CSSProperties = {
     border: "none",
@@ -44,7 +51,7 @@ export function CourtView(props: CourtViewProps) {
     alignItems: "center",
     gap: 6,
     minHeight: 64,
-    cursor: "pointer",
+    cursor: winnerTapEnabled ? "pointer" : "default",
   };
 
   const teamAStyle: JSX.CSSProperties = {
@@ -66,7 +73,7 @@ export function CourtView(props: CourtViewProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <strong style={{ letterSpacing: "0.05em", fontSize: 13 }}>COURT {court.number}</strong>
         <span class={court.type === "doubles" ? "tag-d" : "tag-s"} style={{ fontSize: 11 }}>
-          {court.type === "doubles" ? "ダブルス" : "シングルス"}
+          {court.type === "doubles" ? t.common.doubles : t.common.singles}
         </span>
       </div>
       <div
@@ -86,7 +93,7 @@ export function CourtView(props: CourtViewProps) {
           type="button"
           data-testid="team-a"
           aria-label="Team A wins"
-          onClick={() => onSetWinner(winA ? null : "A")}
+          onClick={() => tap(winA ? null : "A")}
           style={teamAStyle}
         >
           {winA && (
@@ -102,7 +109,7 @@ export function CourtView(props: CourtViewProps) {
           type="button"
           data-testid="team-b"
           aria-label="Team B wins"
-          onClick={() => onSetWinner(winB ? null : "B")}
+          onClick={() => tap(winB ? null : "B")}
           style={teamBStyle}
         >
           {winB && (

@@ -3,8 +3,11 @@ import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
+import { sessionHasResults } from "@/state/session-store";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
+import { BRAND, IS_LOCAL } from "@/flavor";
 
 const showNames = signal(false);
 
@@ -12,11 +15,7 @@ function generateNextRound(): void {
   sessionStore.nextRound().catch((e) => {
     console.error("nextRound failed", e);
     const msg = e instanceof Error ? e.message : String(e);
-    void appDialog.alert(
-      `ラウンドの保存に失敗しました:\n${msg}\n` +
-        "画面のラウンドはまだサーバーに保存されていません。電波を確認してください。" +
-        "（次の操作（勝敗タップ等）が成功すれば自動的に保存されます）",
-    );
+    void appDialog.alert(t.round.saveFailed(msg));
   });
 }
 
@@ -43,8 +42,8 @@ export function RoundPage() {
   if (!s) {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>セッションが開始されていません</h2>
-        <p><a href={linkTo("/session/new")}>新規セッションを作成</a></p>
+        <h2>{t.common.noSessionTitle}</h2>
+        <p><a href={linkTo("/session/new")}>{t.common.createNewSession}</a></p>
       </main>
     );
   }
@@ -55,13 +54,13 @@ export function RoundPage() {
     // Defensive: shouldn't happen if the user came from number-map.
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>R{s.currentRoundIndex + 1} を準備中…</h2>
+        <h2>{t.round.preparing(s.currentRoundIndex + 1)}</h2>
         <button
           class="btn-primary"
           disabled={sessionStore.generating.value}
           onClick={() => { generateNextRound(); }}
         >
-          生成する
+          {t.round.generate}
         </button>
       </main>
     );
@@ -100,7 +99,7 @@ export function RoundPage() {
         }}
       >
         <strong style={{ fontSize: 18 }}>
-          GG <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
+          {BRAND} <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
         </strong>
         <label style={{ fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
           <input
@@ -109,7 +108,7 @@ export function RoundPage() {
             checked={showNames.value}
             onInput={(e) => { showNames.value = (e.currentTarget as HTMLInputElement).checked; }}
           />
-          名前
+          {t.common.namesToggle}
         </label>
       </header>
 
@@ -120,13 +119,14 @@ export function RoundPage() {
           todayNumbers={todayNumbers}
           nameFor={nameFor}
           showNames={showNames.value}
+          winnerTapEnabled={!IS_LOCAL}
           onSetWinner={(w) => {
             sessionStore.recordWinner(c.number, w).catch((e) => {
               console.error("recordWinner failed", e);
               const msg = e instanceof Error
                 ? e.message
                 : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-              void appDialog.alert(`勝敗の保存に失敗しました:\n${msg}`);
+              void appDialog.alert(t.round.recordWinnerFailed(msg));
             });
           }}
         />
@@ -146,7 +146,7 @@ export function RoundPage() {
             marginBottom: 8,
           }}
         >
-          <strong style={{ fontSize: 13 }}>休憩</strong>
+          <strong style={{ fontSize: 13 }}>{t.common.rest}</strong>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {resterLabels.map((label, i) => (
               <span
@@ -173,7 +173,7 @@ export function RoundPage() {
           disabled={s.currentRoundIndex === 0}
           onClick={() => sessionStore.goToPreviousRound()}
         >
-          <span class="a">←</span> 前
+          <span class="a">←</span> {t.round.prev}
         </button>
         <button
           type="button"
@@ -183,7 +183,7 @@ export function RoundPage() {
           disabled={sessionStore.generating.value}
           onClick={() => { generateNextRound(); }}
         >
-          次 <span class="a">→</span>
+          {t.round.next} <span class="a">→</span>
         </button>
       </div>
 
@@ -191,13 +191,33 @@ export function RoundPage() {
         type="button"
         data-testid="end-session-btn"
         onClick={async () => {
-          if (!(await appDialog.confirm("セッションを終了してランキングに反映します。\n（間違えた場合は「過去のセッション」から削除できます）"))) return;
+          // A session with zero recorded winners is almost always a false
+          // start (lineup redo, testing). Offer to discard it so it doesn't
+          // pile up as a junk 'past' row and skew pair-history fairness —
+          // 2026-07-18 left three such rows next to the one real session.
+          const s = sessionStore.session.value;
+          if (s && !sessionHasResults(s)) {
+            if (await appDialog.confirm(t.round.discardConfirm)) {
+              try {
+                await sessionStore.discardSession();
+                navigate("/");
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                void appDialog.alert(t.round.discardFailed(msg));
+                console.error("discardSession failed", e);
+              }
+              return;
+            }
+            if (!(await appDialog.confirm(t.round.discardKeepConfirm))) return;
+          } else if (!(await appDialog.confirm(t.round.endConfirm))) {
+            return;
+          }
           try {
             await sessionStore.endSession();
             navigate("/");
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            void appDialog.alert(`セッション終了に失敗しました:\n${msg}`);
+            void appDialog.alert(t.round.endFailed(msg));
             console.error("endSession failed", e);
           }
         }}
@@ -215,7 +235,7 @@ export function RoundPage() {
           cursor: "pointer",
         }}
       >
-        セッション終了
+        {t.round.endSession}
       </button>
     </main>
   );

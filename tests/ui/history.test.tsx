@@ -75,6 +75,7 @@ function makeSession(rounds: number): unknown {
     currentRoundIndex: rounds - 1,
     todayStats: new Map(),
     prevResters: [],
+    prevSingles: [],
     rngSeed: 1,
   };
 }

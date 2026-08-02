@@ -1,7 +1,6 @@
 import type { MatchResult, Member } from "@/engine/models";
 import type { SessionAttendance } from "@/engine/ranking";
 import type { RsvpPublicRow } from "./rsvp-repository";
-import { supabase } from "./supabase-client";
 
 /**
  * Per-member data export schema. Versioned so a future change can be detected
@@ -89,6 +88,15 @@ export function buildMemberExport(input: {
  * then synthesises a download in the browser. Throws on any DB error.
  */
 export async function exportMemberData(memberId: number): Promise<void> {
+  // Defensive: the local flavour hides the per-member export button (its
+  // settings page has a whole-device export instead) — fail loudly if some
+  // future code path reaches this anyway.
+  const { IS_LOCAL } = await import("@/flavor");
+  if (IS_LOCAL) throw new Error("per-member export is not available in the local flavour");
+  // Lazy import: a static one would evaluate supabase-client at module load,
+  // which throws without VITE_SUPABASE_* env — the local (device-only)
+  // flavour bundles this page module but must never execute this path.
+  const { supabase } = await import("./supabase-client");
   const [memberRes, sessionsRes, matchesRes, rsvpsRes] = await Promise.all([
     supabase.from("members").select("*").eq("id", memberId).single(),
     supabase.from("sessions").select("id,date,location,attendees").eq("status", "past"),

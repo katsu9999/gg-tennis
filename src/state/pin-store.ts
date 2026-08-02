@@ -26,6 +26,12 @@ export interface PinStore {
   getPin(): string | null;
   /** Clear the cached PIN and lock again. */
   lock(): void;
+  /**
+   * Rotate the club PIN (requires an unlocked store; uses the cached PIN as
+   * proof). On success the new PIN replaces the cached one — the store stays
+   * unlocked. Throws with a user-showable message on failure.
+   */
+  setClubPin(newPin: string): Promise<void>;
 }
 
 export function createPinStore(supabase: SupabaseClient): PinStore {
@@ -74,6 +80,15 @@ export function createPinStore(supabase: SupabaseClient): PinStore {
     lock() {
       cachedPin = null;
       isUnlocked.value = false;
+    },
+    async setClubPin(newPin) {
+      if (!cachedPin) throw new Error("PIN がロックされています");
+      const { error } = await supabase.rpc("set_club_pin", {
+        p_pin: cachedPin,
+        p_new_pin: newPin,
+      });
+      if (error) throw new Error(error.message);
+      cachedPin = newPin;
     },
   };
 }

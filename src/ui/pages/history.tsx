@@ -5,6 +5,7 @@ import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
+import { t } from "@/ui/i18n";
 
 // Module-scoped UI state. Survives navigation within the session; reset
 // inside `useEffect` based on session/round counts.
@@ -28,8 +29,8 @@ export function HistoryPage() {
   if (!s) {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>セッションが開始されていません</h2>
-        <p><a href={linkTo("/")}>ホームへ</a></p>
+        <h2>{t.common.noSessionTitle}</h2>
+        <p><a href={linkTo("/")}>{t.common.homeLink}</a></p>
       </main>
     );
   }
@@ -37,9 +38,9 @@ export function HistoryPage() {
   if (s.rounds.length === 0) {
     return (
       <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
-        <h2>履歴なし</h2>
-        <p>まだラウンドが生成されていません。</p>
-        <p><a href={linkTo("/session/round")}>ラウンド画面へ</a></p>
+        <h2>{t.history.emptyTitle}</h2>
+        <p>{t.history.emptyBody}</p>
+        <p><a href={linkTo("/session/round")}>{t.history.toRound}</a></p>
       </main>
     );
   }
@@ -128,7 +129,7 @@ export function HistoryPage() {
           checked={showNames.value}
           onInput={(e) => { showNames.value = (e.currentTarget as HTMLInputElement).checked; }}
         />
-        {" "}名前で表示
+        {" "}{t.common.showNames}
       </label>
 
       {round.courts.map((c) => (
@@ -144,7 +145,7 @@ export function HistoryPage() {
               const msg = e instanceof Error
                 ? e.message
                 : (e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e));
-              void appDialog.alert(`勝敗の保存に失敗しました:\n${msg}`);
+              void appDialog.alert(t.round.recordWinnerFailed(msg));
             });
           }}
         />
@@ -164,7 +165,7 @@ export function HistoryPage() {
             marginBottom: 16,
           }}
         >
-          <strong>休憩</strong>
+          <strong>{t.common.rest}</strong>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontWeight: 900 }}>
             {resterLabels.map((label, i) => (
               <span key={i}>{label}</span>
@@ -179,7 +180,7 @@ export function HistoryPage() {
         style={{ width: "100%" }}
         onClick={() => navigate("/session/round")}
       >
-        現在のラウンドへ →
+        {t.history.toCurrentRound}
       </button>
     </main>
   );
