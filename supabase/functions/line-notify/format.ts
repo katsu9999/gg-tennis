@@ -85,11 +85,14 @@ export function parsePayload(body: unknown): LineRoundPayload | null {
  *
  *   💤 休憩：⑦高田
  */
+const COURT_MARKS = ["🟢", "🔵", "🟠", "🟣", "🟡", "🔴", "🟤", "⚪"];
+
 export function formatRoundMessage(p: LineRoundPayload): string {
   const blocks: string[] = [`🎾 R${p.roundNo} スタート！`];
   for (const c of p.courts) {
     const suffix = c.type === "singles" ? "（シングルス）" : "";
-    blocks.push(`▶ コート${c.number}${suffix}\n${c.teamA.join("・")} vs ${c.teamB.join("・")}`);
+    const mark = COURT_MARKS[(c.number - 1) % COURT_MARKS.length];
+    blocks.push(`${mark} コート${c.number}${suffix}\n${c.teamA.join("・")} vs ${c.teamB.join("・")}`);
   }
   if (p.resters.length > 0) {
     blocks.push(`💤 休憩：${p.resters.join("・")}`);
