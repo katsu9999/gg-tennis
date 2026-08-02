@@ -7,8 +7,19 @@ import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
 import { sessionStore, rosterStore } from "@/ui/stores";
 
+/** Circled digit for a todayNumber (①..㊿); parenthesised fallback beyond 50.
+ *  On court everyone identifies by their assigned number, so the LINE message
+ *  pairs number + name. */
+function circled(n: number): string {
+  if (n >= 1 && n <= 20) return String.fromCodePoint(0x2460 + n - 1);
+  if (n >= 21 && n <= 35) return String.fromCodePoint(0x3251 + n - 21);
+  if (n >= 36 && n <= 50) return String.fromCodePoint(0x32b1 + n - 36);
+  return `(${n})`;
+}
+
 /** Build the Edge Function payload for the session's current round, with
- *  attendee refs resolved to display names. Exported for tests. */
+ *  attendee refs resolved to "④名前" (todayNumber + display name). Exported
+ *  for tests. */
 export function buildRoundPayload(
   s: InMemorySession,
   memberNames: Map<number, string>,
@@ -17,12 +28,20 @@ export function buildRoundPayload(
   if (!round) return null;
 
   const guestNames = new Map<string, string>();
+  const todayNumbers = new Map<string, number>();
   for (const a of s.attendees) {
-    if (a.isGuest && a.guestName) guestNames.set(JSON.stringify(a.ref), a.guestName);
+    const key = JSON.stringify(a.ref);
+    todayNumbers.set(key, a.todayNumber);
+    if (a.isGuest && a.guestName) guestNames.set(key, a.guestName);
   }
   const label = (ref: AttendeeRef): string => {
-    if (ref.kind === "member") return memberNames.get(ref.memberId) ?? `#${ref.memberId}`;
-    return guestNames.get(JSON.stringify(ref)) ?? "Guest";
+    const key = JSON.stringify(ref);
+    const name =
+      ref.kind === "member"
+        ? (memberNames.get(ref.memberId) ?? `#${ref.memberId}`)
+        : (guestNames.get(key) ?? "Guest");
+    const num = todayNumbers.get(key);
+    return num === undefined ? name : `${circled(num)}${name}`;
   };
 
   return {

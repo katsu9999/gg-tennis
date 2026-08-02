@@ -58,14 +58,14 @@ const names = new Map([
 ]);
 
 describe("buildRoundPayload", () => {
-  it("resolves member names, guest names, and falls back for unknown members", () => {
+  it("pairs todayNumber with each name (④名前), guests included", () => {
     const payload = buildRoundPayload(makeSession([round], 0), names)!;
     expect(payload).toEqual({
       roundNo: 1,
       courts: [
-        { number: 1, type: "doubles", teamA: ["田中", "佐藤"], teamB: ["山本", "ビジター"] },
+        { number: 1, type: "doubles", teamA: ["①田中", "②佐藤"], teamB: ["③山本", "④ビジター"] },
       ],
-      resters: ["#5"], // member 5 not in roster map → fallback label
+      resters: ["⑤#5"], // member 5 not in roster map → number + fallback label
     });
   });
 
