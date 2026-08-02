@@ -59,8 +59,8 @@ describe("formatRoundMessage", () => {
   it("renders one block per court with singles marker and resters", () => {
     expect(formatRoundMessage(valid())).toBe(
       "🎾 R3 スタート！\n\n" +
-        "▶ コート1\n田中・佐藤 vs 山本・鈴木\n\n" +
-        "▶ コート2（シングルス）\n高橋 vs 渡辺\n\n" +
+        "🟢 コート1\n田中・佐藤 vs 山本・鈴木\n\n" +
+        "🔵 コート2（シングルス）\n高橋 vs 渡辺\n\n" +
         "💤 休憩：高田",
     );
   });
