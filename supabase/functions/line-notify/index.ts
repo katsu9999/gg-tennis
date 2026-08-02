@@ -15,7 +15,12 @@
  * the group) + best-effort rate limit per isolate.
  */
 
-import { parsePayload, formatRoundMessage } from "./format.ts";
+import {
+  parsePayload,
+  formatRoundMessage,
+  parseBookingPayload,
+  formatBookingMessage,
+} from "./format.ts";
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -70,10 +75,15 @@ Deno.serve(async (req) => {
   } catch {
     return json(400, { error: "invalid_json" });
   }
-  const payload = parsePayload(body);
-  if (!payload) {
+  // Two message kinds share this function: round announcements from the
+  // shuffle PWA (no `kind` field) and booking confirmations from GG Booker
+  // (`kind: "booking"`).
+  const booking = parseBookingPayload(body);
+  const round = booking ? null : parsePayload(body);
+  if (!booking && !round) {
     return json(400, { error: "invalid_payload" });
   }
+  const text = booking ? formatBookingMessage(booking) : formatRoundMessage(round!);
 
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
@@ -83,7 +93,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       to: groupId,
-      messages: [{ type: "text", text: formatRoundMessage(payload) }],
+      messages: [{ type: "text", text }],
     }),
   });
 
