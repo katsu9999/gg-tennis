@@ -4,6 +4,7 @@ import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { sessionHasResults } from "@/state/session-store";
+import { offerLineNotify } from "@/ui/line-notify";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
@@ -12,11 +13,21 @@ import { BRAND, IS_LOCAL } from "@/flavor";
 const showNames = signal(false);
 
 function generateNextRound(): void {
-  sessionStore.nextRound().catch((e) => {
-    console.error("nextRound failed", e);
-    const msg = e instanceof Error ? e.message : String(e);
-    void appDialog.alert(t.round.saveFailed(msg));
-  });
+  // Only offer the LINE push when a NEW round was generated — stepping
+  // forward through rounds already announced (after 前) re-runs nextRound
+  // without adding one, and re-asking would be noise.
+  const roundsBefore = sessionStore.session.value?.rounds.length ?? 0;
+  sessionStore
+    .nextRound()
+    .then(() => {
+      const s = sessionStore.session.value;
+      if (s && s.rounds.length > roundsBefore) void offerLineNotify();
+    })
+    .catch((e) => {
+      console.error("nextRound failed", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      void appDialog.alert(t.round.saveFailed(msg));
+    });
 }
 
 /** Test helper — resets module-scoped UI state. */
