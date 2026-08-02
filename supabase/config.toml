@@ -1,0 +1,9 @@
+# Supabase CLI config — currently only Edge Function flags.
+# Both functions are called without a Supabase JWT: the PWA uses the new
+# sb_publishable API key (not a JWT), and LINE's webhook sends none.
+
+[functions.line-notify]
+verify_jwt = false
+
+[functions.line-webhook]
+verify_jwt = false

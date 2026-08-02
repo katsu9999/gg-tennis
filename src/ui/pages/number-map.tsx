@@ -4,6 +4,7 @@ import { sessionStore, rosterStore } from "@/ui/stores";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import type { InMemorySession } from "@/state/session-store";
+import { offerLineNotify } from "@/ui/line-notify";
 
 export function NumberMapPage() {
   // Load roster so we can resolve memberId → name
@@ -33,7 +34,12 @@ export function NumberMapPage() {
   function startFirstRound(): void {
     sessionStore
       .nextRound()
-      .then(() => navigate("/session/round"))
+      .then(() => {
+        navigate("/session/round");
+        // R1 is where everyone learns their court — offer the LINE push here
+        // too, after the round screen is already up.
+        void offerLineNotify();
+      })
       .catch((e) => {
         console.error("startFirstRound failed", e);
         const msg = e instanceof Error ? e.message : String(e);
