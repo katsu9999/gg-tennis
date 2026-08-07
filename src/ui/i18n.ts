@@ -51,6 +51,7 @@ export const ja = {
     endFailed: (msg: string) => `セッション終了に失敗しました:\n${msg}`,
     lineSendConfirm: (roundNo: number) =>
       `R${roundNo} の組み合わせをLINEグループに送りますか？`,
+    lineSendNow: "このラウンドをLINEに送る",
     lineSendFailed: (msg: string) =>
       `LINEへの送信に失敗しました:\n${msg}\n（ラウンドはこのまま進められます）`,
     discardConfirm:
@@ -200,6 +201,7 @@ export const en: Strings = {
     endConfirm: "End this session?\n(You can delete it later from Past sessions if this was a mistake.)",
     endFailed: (msg: string) => `Failed to end the session:\n${msg}`,
     lineSendConfirm: (roundNo: number) => `Send the R${roundNo} assignments to the LINE group?`,
+    lineSendNow: "Send this round to LINE",
     lineSendFailed: (msg: string) =>
       `Failed to send to LINE:\n${msg}\n(You can keep playing — the round is unaffected.)`,
     discardConfirm:

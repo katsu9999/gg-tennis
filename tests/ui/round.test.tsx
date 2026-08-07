@@ -257,3 +257,36 @@ describe("RoundPage", () => {
     expect(btn.disabled).toBe(true);
   });
 });
+
+describe("RoundPage — LINE 再送ボタン", () => {
+  // 送信のチャンスがラウンド生成直後の1回しかないと、確認ダイアログを
+  // キャンセルした瞬間にそのラウンドは二度と送れなくなる。コート上では
+  // 「まだ送らないで」→「やっぱり今送る」が普通に起きるので、いつでも
+  // 送り直せるボタンを置く。
+  it("ボタンを押すと LINE 送信が呼ばれる", async () => {
+    const line = await import("@/ui/line-notify");
+    const spy = vi.spyOn(line, "offerLineNotify").mockResolvedValue(undefined);
+    sessionStore.session.value = makeSession(makeRound()) as never;
+
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("line-resend-btn"));
+
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    spy.mockRestore();
+  });
+
+  it("2回押したら2回送る（送信済みで止めない）", async () => {
+    // 「送ったはず」を覚えさせると、本当に送れていない時に詰む。
+    // 押した回数だけ素直に飛ばす方が事故が軽い。
+    const line = await import("@/ui/line-notify");
+    const spy = vi.spyOn(line, "offerLineNotify").mockResolvedValue(undefined);
+    sessionStore.session.value = makeSession(makeRound()) as never;
+
+    const { getByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("line-resend-btn"));
+    fireEvent.click(getByTestId("line-resend-btn"));
+
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    spy.mockRestore();
+  });
+});

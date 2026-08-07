@@ -145,6 +145,12 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 呼ばれたこと自体を必ず残す。Supabase の edge ログは取りこぼすので、
+  // 「押したのに届かない」を切り分けるにはこちらの関数ログが要る。
+  // 宛先は先頭だけ（1:1 の U… とグループの C… を区別できれば十分）。
+  const kind = booking ? "booking" : `round:${round!.roundNo}`;
+  console.log(`notify start kind=${kind} to=${groupId.slice(0, 5)}… msgs=${messages.length}`);
+
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -153,6 +159,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({ to: groupId, messages }),
   });
+  console.log(`notify done kind=${kind} line_status=${res.status}`);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

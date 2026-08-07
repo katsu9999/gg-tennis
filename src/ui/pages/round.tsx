@@ -198,6 +198,32 @@ export function RoundPage() {
         </button>
       </div>
 
+      {/* ラウンド生成直後の確認ダイアログを断ると、そのラウンドは二度と送れない。
+          コート上では「まだ送らないで」→「やっぱり送る」が普通に起きるので、
+          いつでも送り直せる口を残す。前のラウンドに戻ってから押せば送り忘れも拾える。
+          何度押しても素直に送る（送信済みを覚えると、本当に届いていない時に詰む）。 */}
+      {!IS_LOCAL && (
+        <button
+          type="button"
+          data-testid="line-resend-btn"
+          onClick={() => { void offerLineNotify(); }}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "1.5px solid var(--line)",
+            borderRadius: 8,
+            color: "var(--muted)",
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          📱 {t.round.lineSendNow}
+        </button>
+      )}
+
       <button
         type="button"
         data-testid="end-session-btn"
