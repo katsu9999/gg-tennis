@@ -42,6 +42,51 @@ const MAX_PER_WINDOW = 10;
 let windowStart = 0;
 let windowCount = 0;
 
+// Booking confirmations carry a screenshot of the club's "Your bookings" page —
+// the only proof that the slot is really held. LINE image messages need a public
+// HTTPS URL, so the PNG arrives here as base64 and we park it in Storage. The
+// booker never sees a Supabase key; the service role stays inside this function.
+const SHOT_BUCKET = "booking-shots";
+const MAX_SHOT_BYTES = 3_000_000;
+
+async function uploadShot(base64Png: string): Promise<string | null> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
+    console.error("shot upload skipped: storage env missing");
+    return null;
+  }
+  let bytes: Uint8Array;
+  try {
+    const bin = atob(base64Png);
+    if (bin.length > MAX_SHOT_BYTES) {
+      console.error("shot upload skipped: too large", bin.length);
+      return null;
+    }
+    bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  } catch {
+    console.error("shot upload skipped: not valid base64");
+    return null;
+  }
+
+  const name = `${crypto.randomUUID()}.png`;
+  const res = await fetch(`${url}/storage/v1/object/${SHOT_BUCKET}/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      apikey: key,
+      "Content-Type": "image/png",
+      "x-upsert": "true",
+    },
+    body: bytes,
+  });
+  if (!res.ok) {
+    console.error("shot upload failed", res.status, await res.text().catch(() => ""));
+    return null;
+  }
+  return `${url}/storage/v1/object/public/${SHOT_BUCKET}/${name}`;
+}
+
 function rateLimited(): boolean {
   const now = Date.now();
   if (now - windowStart > WINDOW_MS) {
@@ -85,16 +130,28 @@ Deno.serve(async (req) => {
   }
   const text = booking ? formatBookingMessage(booking) : formatRoundMessage(round!);
 
+  const messages: Record<string, unknown>[] = [{ type: "text", text }];
+
+  // The screenshot is a nice-to-have: if Storage hiccups, still send the text.
+  const rawShot = (body as Record<string, unknown>).imagePng;
+  if (booking && typeof rawShot === "string" && rawShot.length > 0) {
+    const shotUrl = await uploadShot(rawShot);
+    if (shotUrl) {
+      messages.push({
+        type: "image",
+        originalContentUrl: shotUrl,
+        previewImageUrl: shotUrl,
+      });
+    }
+  }
+
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      to: groupId,
-      messages: [{ type: "text", text }],
-    }),
+    body: JSON.stringify({ to: groupId, messages }),
   });
 
   if (!res.ok) {
