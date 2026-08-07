@@ -96,7 +96,8 @@ describe("booking payload", () => {
   });
 
   it("gatePin is optional; missing required fields reject", () => {
-    const { gatePin: _pin, ...noPin } = booking();
+    const noPin: Record<string, unknown> = { ...booking() };
+    delete noPin.gatePin;
     const p = parseBookingPayload(noPin)!;
     expect(p.gatePin).toBeUndefined();
     expect(formatBookingMessage(p)).not.toContain("ゲート");
