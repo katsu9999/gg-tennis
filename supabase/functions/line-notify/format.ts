@@ -117,6 +117,42 @@ export interface LineBookingPayload {
   account: string;
   /** Optional gate code for the venue entrance. */
   gatePin?: string;
+  /**
+   * Optional per-hour breakdown. Hendon issues a different gate PIN for every
+   * hour, so a 10:00-12:00 block needs two of them — one `gatePin` cannot
+   * carry that. When present this replaces the single-PIN line.
+   */
+  slots?: LineBookingSlot[];
+}
+
+export interface LineBookingSlot {
+  start: string;
+  end: string;
+  gatePin?: string;
+}
+
+const MAX_SLOTS = 8;
+
+function parseSlots(raw: unknown): LineBookingSlot[] | null | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_SLOTS) return null;
+  const out: LineBookingSlot[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) return null;
+    const s = item as Record<string, unknown>;
+    const start = cleanField(s.start, 10);
+    const end = cleanField(s.end, 10);
+    if (!start || !end) return null;
+    const slot: LineBookingSlot = { start, end };
+    // 空文字は「PIN なし」の意味で送られてくる。欠落と同じ扱いにする。
+    if (typeof s.gatePin === "string" && s.gatePin.trim() !== "") {
+      const pin = cleanField(s.gatePin, 12);
+      if (!pin) return null;
+      slot.gatePin = pin;
+    }
+    out.push(slot);
+  }
+  return out;
 }
 
 function cleanField(raw: unknown, maxLen: number): string | null {
@@ -142,6 +178,9 @@ export function parseBookingPayload(body: unknown): LineBookingPayload | null {
     if (!pin) return null;
     payload.gatePin = pin;
   }
+  const slots = parseSlots(b.slots);
+  if (slots === null) return null;
+  if (slots) payload.slots = slots;
   return payload;
 }
 
@@ -164,6 +203,12 @@ export function formatBookingMessage(p: LineBookingPayload): string {
     `🎾 ${p.court}`,
     `👤 予約アカウント：${p.account}`,
   ];
-  if (p.gatePin) lines.push(`🔑 ゲート：${p.gatePin}`);
+  const withPins = (p.slots ?? []).filter((s) => s.gatePin);
+  if (withPins.length > 0) {
+    lines.push("", "🔑 ゲートPIN");
+    for (const s of withPins) lines.push(`・${s.start}〜${s.end}：${s.gatePin}`);
+  } else if (p.gatePin) {
+    lines.push(`🔑 ゲート：${p.gatePin}`);
+  }
   return lines.join("\n");
 }
