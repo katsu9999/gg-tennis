@@ -4,7 +4,7 @@ import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { sessionHasResults } from "@/state/session-store";
-import { offerLineNotify } from "@/ui/line-notify";
+import { offerLineNotify, offerSessionSummary, buildSummaryPayload } from "@/ui/line-notify";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
@@ -249,8 +249,17 @@ export function RoundPage() {
           } else if (!(await appDialog.confirm(t.round.endConfirm))) {
             return;
           }
+          // 成績は endSession() がセッションを畳む前にしか作れないので、
+          // 先に組み立てておく。送信は終了処理が通ったあと。
+          const summary = s
+            ? buildSummaryPayload(
+                s,
+                new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const)),
+              )
+            : null;
           try {
             await sessionStore.endSession();
+            await offerSessionSummary(summary);
             navigate("/");
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

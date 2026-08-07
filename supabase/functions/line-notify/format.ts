@@ -212,3 +212,90 @@ export function formatBookingMessage(p: LineBookingPayload): string {
   }
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Session summary (GG Shuffle → LINE, at "End session")
+// ---------------------------------------------------------------------------
+
+export interface LineStanding {
+  /** e.g. "①田中" — todayNumber + display name, built by the caller. */
+  label: string;
+  wins: number;
+  losses: number;
+}
+
+export interface LineSummaryPayload {
+  kind: "summary";
+  rounds: number;
+  attendees: number;
+  standings: LineStanding[];
+}
+
+const MAX_STANDINGS = 40;
+
+function wholeCount(raw: unknown, max: number): number | null {
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > max) {
+    return null;
+  }
+  return raw;
+}
+
+export function parseSummaryPayload(body: unknown): LineSummaryPayload | null {
+  if (typeof body !== "object" || body === null) return null;
+  const b = body as Record<string, unknown>;
+  if (b.kind !== "summary") return null;
+
+  const rounds = wholeCount(b.rounds, 200);
+  const attendees = wholeCount(b.attendees, 200);
+  if (rounds === null || attendees === null) return null;
+
+  if (!Array.isArray(b.standings) || b.standings.length === 0 ||
+      b.standings.length > MAX_STANDINGS) {
+    return null;
+  }
+  const standings: LineStanding[] = [];
+  for (const item of b.standings) {
+    if (typeof item !== "object" || item === null) return null;
+    const s = item as Record<string, unknown>;
+    const label = cleanField(s.label, 40);
+    const wins = wholeCount(s.wins, 500);
+    const losses = wholeCount(s.losses, 500);
+    if (!label || wins === null || losses === null) return null;
+    standings.push({ label, wins, losses });
+  }
+  return { kind: "summary", rounds, attendees, standings };
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+/** Render the end-of-session standings:
+ *
+ *   🏆 今日のセッション終了！
+ *
+ *   🥇 ①田中  5勝1敗
+ *   🥈 ④鈴木  4勝2敗
+ *   🥈 ②佐藤  4勝2敗
+ *   4. ⑦山本  1勝5敗
+ *
+ *   全6ラウンド・参加12名
+ *   おつかれさまでした！
+ *
+ * Equal win counts share a rank (and its medal); the next distinct score
+ * skips ahead, so a tie for 2nd is followed by 4th — the way people read a
+ * leaderboard. Standings arrive pre-sorted from the app.
+ */
+export function formatSummaryMessage(p: LineSummaryPayload): string {
+  const lines = ["🏆 今日のセッション終了！", ""];
+
+  let rank = 0;
+  let prevWins: number | null = null;
+  p.standings.forEach((s, i) => {
+    if (prevWins === null || s.wins !== prevWins) rank = i + 1;
+    prevWins = s.wins;
+    const mark = rank <= 3 ? MEDALS[rank - 1] : `${rank}.`;
+    lines.push(`${mark} ${s.label}  ${s.wins}勝${s.losses}敗`);
+  });
+
+  lines.push("", `全${p.rounds}ラウンド・参加${p.attendees}名`, "おつかれさまでした！");
+  return lines.join("\n");
+}

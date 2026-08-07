@@ -5,6 +5,8 @@ import {
   parseBookingPayload,
   formatBookingMessage,
   type LineRoundPayload,
+  parseSummaryPayload,
+  formatSummaryMessage,
 } from "../../supabase/functions/line-notify/format";
 
 const valid = (): LineRoundPayload => ({
@@ -107,5 +109,45 @@ describe("booking payload", () => {
 
   it("round payloads without kind are not misparsed as bookings", () => {
     expect(parseBookingPayload(valid())).toBeNull();
+  });
+});
+
+describe("session summary payload", () => {
+  const summary = () => ({
+    kind: "summary" as const,
+    rounds: 6,
+    attendees: 4,
+    standings: [
+      { label: "①田中", wins: 5, losses: 1 },
+      { label: "④鈴木", wins: 4, losses: 2 },
+      { label: "②佐藤", wins: 4, losses: 2 },
+      { label: "⑦山本", wins: 1, losses: 5 },
+    ],
+  });
+
+  it("renders medals, tie ranks and the footer", () => {
+    const p = parseSummaryPayload(summary())!;
+    expect(p).not.toBeNull();
+    const msg = formatSummaryMessage(p);
+    expect(msg).toContain("🏆 今日のセッション終了！");
+    expect(msg).toContain("🥇 ①田中  5勝1敗");
+    // 同率2位は2人とも銀。次は4位（3位を飛ばす）
+    expect(msg).toContain("🥈 ④鈴木  4勝2敗");
+    expect(msg).toContain("🥈 ②佐藤  4勝2敗");
+    expect(msg).toContain("4. ⑦山本  1勝5敗");
+    expect(msg).toContain("全6ラウンド・参加4名");
+  });
+
+  it("rejects malformed payloads", () => {
+    expect(parseSummaryPayload({ ...summary(), standings: [] })).toBeNull();
+    expect(parseSummaryPayload({ ...summary(), kind: "booking" })).toBeNull();
+    expect(parseSummaryPayload({ ...summary(), rounds: -1 })).toBeNull();
+    expect(parseSummaryPayload({ ...summary(), standings: [{ label: "", wins: 1, losses: 0 }] })).toBeNull();
+    expect(parseSummaryPayload({ roundNo: 1 })).toBeNull();
+  });
+
+  it("is not confused with round or booking payloads", () => {
+    expect(parseBookingPayload(summary())).toBeNull();
+    expect(parseSummaryPayload(valid())).toBeNull();
   });
 });

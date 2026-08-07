@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 // buildRoundPayload is under test here — stub the stores out.
 vi.mock("@/ui/stores", () => ({ sessionStore: {}, rosterStore: {} }));
 
-import { buildRoundPayload } from "@/ui/line-notify";
+import { buildRoundPayload, buildSummaryPayload } from "@/ui/line-notify";
 import type { InMemorySession } from "@/state/session-store";
 import type { Round } from "@/engine/models";
 
@@ -77,5 +77,65 @@ describe("buildRoundPayload", () => {
 
   it("returns null when there is no round at the current index", () => {
     expect(buildRoundPayload(makeSession([], -1), names)).toBeNull();
+  });
+});
+
+describe("buildSummaryPayload", () => {
+  // 勝敗はラウンドのコートに記録される。todayStats は play/rest しか持たない
+  // ので、ここで rounds から数え直す。
+  const M = new Map<number, string>([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "鈴木"]]);
+
+  function court(
+    teamA: number[], teamB: number[], winner: "A" | "B" | "none", number = 1,
+  ) {
+    return {
+      number,
+      type: "doubles" as const,
+      teamA: teamA.map((id) => ({ kind: "member" as const, memberId: id })),
+      teamB: teamB.map((id) => ({ kind: "member" as const, memberId: id })),
+      winner,
+    };
+  }
+
+  it("勝敗を数えて勝ち数順に並べる", () => {
+    const rounds = [
+      { index: 0, courts: [court([1, 2], [3, 5], "A")], resters: [] },
+      { index: 1, courts: [court([1, 3], [2, 5], "A")], resters: [] },
+    ] as never as Round[];
+    const p = buildSummaryPayload(makeSession(rounds, 1), M)!;
+
+    expect(p.kind).toBe("summary");
+    expect(p.rounds).toBe(2);
+    expect(p.standings[0]).toEqual({ label: "①田中", wins: 2, losses: 0 });
+    // 佐藤は1勝1敗、山本も1勝1敗、鈴木は0勝2敗
+    expect(p.standings[p.standings.length - 1]).toEqual({ label: "⑤鈴木", wins: 0, losses: 2 });
+  });
+
+  it("勝敗未記録のコートは数えない", () => {
+    const rounds = [
+      { index: 0, courts: [court([1, 2], [3, 5], "none")], resters: [] },
+    ] as never as Round[];
+    const p = buildSummaryPayload(makeSession(rounds, 0), M)!;
+    expect(p.standings.every((s) => s.wins === 0 && s.losses === 0)).toBe(true);
+  });
+
+  it("試合に出ていない人も0勝0敗で載せる", () => {
+    // 全員休みのラウンドしかない場合でも、参加者一覧としては意味がある。
+    const rounds = [{ index: 0, courts: [], resters: [] }] as never as Round[];
+    const p = buildSummaryPayload(makeSession(rounds, 0), M)!;
+    expect(p.standings).toHaveLength(5);
+    expect(p.attendees).toBe(5);
+  });
+
+  it("ゲストも名前で載る", () => {
+    const rounds = [
+      { index: 0, courts: [court([1, 2], [3, 5], "A")], resters: [] },
+    ] as never as Round[];
+    const p = buildSummaryPayload(makeSession(rounds, 0), M)!;
+    expect(p.standings.map((s) => s.label)).toContain("④ビジター");
+  });
+
+  it("ラウンドが無ければ null（送らない）", () => {
+    expect(buildSummaryPayload(makeSession([], 0), M)).toBeNull();
   });
 });
