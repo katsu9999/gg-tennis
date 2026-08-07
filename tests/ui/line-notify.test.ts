@@ -112,19 +112,31 @@ describe("buildSummaryPayload", () => {
   });
 
   it("勝敗未記録のコートは数えない", () => {
+    // 1面は決着、もう1面は未記録。未記録の方は勝敗どちらにも足さない。
     const rounds = [
-      { index: 0, courts: [court([1, 2], [3, 5], "none")], resters: [] },
+      {
+        index: 0,
+        courts: [court([1, 2], [3, 5], "A", 1), court([1, 3], [2, 5], "none", 2)],
+        resters: [],
+      },
     ] as never as Round[];
     const p = buildSummaryPayload(makeSession(rounds, 0), M)!;
-    expect(p.standings.every((s) => s.wins === 0 && s.losses === 0)).toBe(true);
+    const tanaka = p.standings.find((s) => s.label === "①田中")!;
+    expect(tanaka).toEqual({ label: "①田中", wins: 1, losses: 0 });
   });
 
   it("試合に出ていない人も0勝0敗で載せる", () => {
-    // 全員休みのラウンドしかない場合でも、参加者一覧としては意味がある。
-    const rounds = [{ index: 0, courts: [], resters: [] }] as never as Round[];
+    // この1通は今日の参加記録も兼ねるので、勝てなかった人も消さない。
+    // 5人中4人だけが1面に入り、⑤鈴木は出番なし。
+    const rounds = [
+      { index: 0, courts: [court([1, 2], [3, 4], "A")], resters: [] },
+    ] as never as Round[];
     const p = buildSummaryPayload(makeSession(rounds, 0), M)!;
     expect(p.standings).toHaveLength(5);
     expect(p.attendees).toBe(5);
+    // 0勝0敗は 0勝1敗より上に来る（同勝ち数なら負けの少ない順）
+    expect(p.standings.find((x) => x.label === "⑤鈴木"))
+      .toEqual({ label: "⑤鈴木", wins: 0, losses: 0 });
   });
 
   it("ゲストも名前で載る", () => {
@@ -137,5 +149,42 @@ describe("buildSummaryPayload", () => {
 
   it("ラウンドが無ければ null（送らない）", () => {
     expect(buildSummaryPayload(makeSession([], 0), M)).toBeNull();
+  });
+});
+
+describe("buildSummaryPayload — 成績ゼロは送らない", () => {
+  const M = new Map<number, string>([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "鈴木"]]);
+
+  it("勝敗が1件も無ければ null", () => {
+    // 全員0勝0敗の表は情報がないうえ「誰も勝たなかった」と誤読される。
+    const rounds = [
+      {
+        index: 0,
+        courts: [{
+          number: 1, type: "doubles",
+          teamA: [{ kind: "member", memberId: 1 }, { kind: "member", memberId: 2 }],
+          teamB: [{ kind: "member", memberId: 3 }, { kind: "member", memberId: 5 }],
+          winner: "none",
+        }],
+        resters: [],
+      },
+    ] as never as Round[];
+    expect(buildSummaryPayload(makeSession(rounds, 0), M)).toBeNull();
+  });
+
+  it("1件でも勝敗があれば送る", () => {
+    const rounds = [
+      {
+        index: 0,
+        courts: [{
+          number: 1, type: "doubles",
+          teamA: [{ kind: "member", memberId: 1 }, { kind: "member", memberId: 2 }],
+          teamB: [{ kind: "member", memberId: 3 }, { kind: "member", memberId: 5 }],
+          winner: "A",
+        }],
+        resters: [],
+      },
+    ] as never as Round[];
+    expect(buildSummaryPayload(makeSession(rounds, 0), M)).not.toBeNull();
   });
 });

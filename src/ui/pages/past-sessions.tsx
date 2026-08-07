@@ -10,6 +10,7 @@ import { useRequirePin } from "@/ui/components/pin-modal";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
+import { buildSummaryPayload, offerSessionSummary } from "@/ui/line-notify";
 
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
@@ -198,6 +199,26 @@ function SessionDetail({ session }: { session: SessionRow }) {
         >
           {t.past.backToList}
         </button>
+        {!IS_LOCAL && (
+          <button
+            type="button"
+            data-testid="past-summary-btn"
+            onClick={() => {
+              void offerSessionSummary(buildSummaryPayload({ rounds, attendees }, byMemberId));
+            }}
+            style={{
+              background: "transparent",
+              border: "1.5px solid var(--line)",
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            🏆 {t.past.sendSummary}
+          </button>
+        )}
         <button
           type="button"
           data-testid="past-delete"

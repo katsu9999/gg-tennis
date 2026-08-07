@@ -65,10 +65,15 @@ export function buildRoundPayload(
  *  attendance record for the day. Exported for tests.
  */
 export function buildSummaryPayload(
-  s: InMemorySession,
+  s: Pick<InMemorySession, "rounds" | "attendees">,
   memberNames: Map<number, string>,
 ): LineSummaryPayload | null {
   if (s.rounds.length === 0) return null;
+  // 勝敗が1つも記録されていないセッションは送らない。並べても全員0勝0敗で、
+  // 読み手に何も伝わらないうえ「今日は誰も勝たなかった」と誤解される。
+  const hasResult = s.rounds.some((r) =>
+    r.courts.some((c) => c.winner === "A" || c.winner === "B"));
+  if (!hasResult) return null;
 
   const guestNames = new Map<string, string>();
   const todayNumbers = new Map<string, number>();

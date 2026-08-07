@@ -135,6 +135,7 @@ export const ja = {
     loading: "読み込み中…",
     empty: "まだ過去セッションがありません。",
     backToList: "← 一覧へ",
+    sendSummary: "成績を送る",
     deleteConfirm:
       "このセッションを削除します。\n試合結果もランキングから除かれます。\nよろしいですか？",
     deleting: "削除中…",
@@ -285,6 +286,7 @@ export const en: Strings = {
     loading: "Loading…",
     empty: "No past sessions yet.",
     backToList: "← Back",
+    sendSummary: "Send standings",
     deleteConfirm: "Delete this session?\nThis cannot be undone.",
     deleting: "Deleting…",
     deleteBtn: "🗑 Delete",
