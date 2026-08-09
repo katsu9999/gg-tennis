@@ -266,36 +266,25 @@ export function parseSummaryPayload(body: unknown): LineSummaryPayload | null {
   return { kind: "summary", rounds, attendees, standings };
 }
 
-const MEDALS = ["🥇", "🥈", "🥉"];
-
-/** Render the end-of-session standings:
+/** Render the end-of-session result. Only the winner is named:
  *
  *   🏆 今日のセッション終了！
  *
  *   🥇 ①田中  5勝1敗
- *   🥈 ④鈴木  4勝2敗
- *   🥈 ②佐藤  4勝2敗
- *   4. ⑦山本  1勝5敗
  *
  *   全6ラウンド・参加12名
  *   おつかれさまでした！
  *
- * Equal win counts share a rank (and its medal); the next distinct score
- * skips ahead, so a tie for 2nd is followed by 4th — the way people read a
- * leaderboard. Standings arrive pre-sorted from the app.
+ * The app sends the full standings, but the group message names only the top
+ * score — a public list of who lost most is not what the day was about. Ties
+ * for first are all named. Standings arrive pre-sorted from the app.
  */
 export function formatSummaryMessage(p: LineSummaryPayload): string {
+  const top = p.standings[0]!.wins;
+  const winners = p.standings.filter((s) => s.wins === top);
+
   const lines = ["🏆 今日のセッション終了！", ""];
-
-  let rank = 0;
-  let prevWins: number | null = null;
-  p.standings.forEach((s, i) => {
-    if (prevWins === null || s.wins !== prevWins) rank = i + 1;
-    prevWins = s.wins;
-    const mark = rank <= 3 ? MEDALS[rank - 1] : `${rank}.`;
-    lines.push(`${mark} ${s.label}  ${s.wins}勝${s.losses}敗`);
-  });
-
+  for (const w of winners) lines.push(`🥇 ${w.label}  ${w.wins}勝${w.losses}敗`);
   lines.push("", `全${p.rounds}ラウンド・参加${p.attendees}名`, "おつかれさまでした！");
   return lines.join("\n");
 }

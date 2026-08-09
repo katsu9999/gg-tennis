@@ -125,17 +125,32 @@ describe("session summary payload", () => {
     ],
   });
 
-  it("renders medals, tie ranks and the footer", () => {
+  it("優勝者だけを出す（2位以下は伏せる）", () => {
     const p = parseSummaryPayload(summary())!;
     expect(p).not.toBeNull();
     const msg = formatSummaryMessage(p);
     expect(msg).toContain("🏆 今日のセッション終了！");
     expect(msg).toContain("🥇 ①田中  5勝1敗");
-    // 同率2位は2人とも銀。次は4位（3位を飛ばす）
-    expect(msg).toContain("🥈 ④鈴木  4勝2敗");
-    expect(msg).toContain("🥈 ②佐藤  4勝2敗");
-    expect(msg).toContain("4. ⑦山本  1勝5敗");
     expect(msg).toContain("全6ラウンド・参加4名");
+    // 2位以下は名前も星も出さない
+    expect(msg).not.toContain("④鈴木");
+    expect(msg).not.toContain("②佐藤");
+    expect(msg).not.toContain("⑦山本");
+  });
+
+  it("同率1位は全員出す", () => {
+    const p = parseSummaryPayload({
+      ...summary(),
+      standings: [
+        { label: "①田中", wins: 5, losses: 1 },
+        { label: "④鈴木", wins: 5, losses: 1 },
+        { label: "②佐藤", wins: 4, losses: 2 },
+      ],
+    })!;
+    const msg = formatSummaryMessage(p);
+    expect(msg).toContain("🥇 ①田中  5勝1敗");
+    expect(msg).toContain("🥇 ④鈴木  5勝1敗");
+    expect(msg).not.toContain("②佐藤");
   });
 
   it("rejects malformed payloads", () => {
