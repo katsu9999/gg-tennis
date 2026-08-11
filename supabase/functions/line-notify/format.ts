@@ -288,3 +288,84 @@ export function formatSummaryMessage(p: LineSummaryPayload): string {
   lines.push("", `全${p.rounds}ラウンド・参加${p.attendees}名`, "おつかれさまでした！");
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Court release (GG Booker → LINE, when the headcount doesn't need 3 courts)
+// ---------------------------------------------------------------------------
+
+export interface LineReleaseSlot {
+  time: string;
+  ok: boolean;
+  /** Why it failed. Only meaningful when ok is false. */
+  reason?: string;
+}
+
+export interface LineReleasePayload {
+  kind: "release";
+  date: string;
+  court: string;
+  /** Headcount that triggered the release ("◯" on Chouseisan). */
+  yes: number;
+  slots: LineReleaseSlot[];
+}
+
+const MAX_RELEASE_SLOTS = 8;
+
+export function parseReleasePayload(body: unknown): LineReleasePayload | null {
+  if (typeof body !== "object" || body === null) return null;
+  const b = body as Record<string, unknown>;
+  if (b.kind !== "release") return null;
+
+  const date = cleanField(b.date, 40);
+  const court = cleanField(b.court, 30);
+  const yes = wholeCount(b.yes, 200);
+  if (!date || !court || yes === null) return null;
+
+  if (!Array.isArray(b.slots) || b.slots.length === 0 ||
+      b.slots.length > MAX_RELEASE_SLOTS) {
+    return null;
+  }
+  const slots: LineReleaseSlot[] = [];
+  for (const item of b.slots) {
+    if (typeof item !== "object" || item === null) return null;
+    const s = item as Record<string, unknown>;
+    const time = cleanField(s.time, 10);
+    if (!time || typeof s.ok !== "boolean") return null;
+    const slot: LineReleaseSlot = { time, ok: s.ok };
+    if (typeof s.reason === "string" && s.reason.trim() !== "") {
+      const reason = cleanField(s.reason, 80);
+      if (!reason) return null;
+      slot.reason = reason;
+    }
+    slots.push(slot);
+  }
+  return { kind: "release", date, court, yes, slots };
+}
+
+/** Render the release result:
+ *
+ *   🟢 コート5 を返却しました
+ *
+ *   📅 8/15（土）
+ *   👥 参加◯ 7名
+ *
+ *   ✅ 10:00
+ *   ✅ 11:00
+ *
+ * A partial failure gets its own heading. Burying a failed slot inside a
+ * success message is how a court nobody released goes unnoticed until the day.
+ */
+export function formatReleaseMessage(p: LineReleasePayload): string {
+  const failed = p.slots.filter((s) => !s.ok);
+  const head = failed.length === 0
+    ? `🟢 ${p.court} を返却しました`
+    : failed.length === p.slots.length
+      ? `❌ ${p.court} の返却に失敗（要手動確認）`
+      : `⚠️ ${p.court} の返却が一部失敗（要手動確認）`;
+
+  const lines = [head, "", `📅 ${p.date}`, `👥 参加◯ ${p.yes}名`, ""];
+  for (const s of p.slots) {
+    lines.push(s.ok ? `✅ ${s.time}` : `❌ ${s.time}（${s.reason ?? "理由不明"}）`);
+  }
+  return lines.join("\n");
+}

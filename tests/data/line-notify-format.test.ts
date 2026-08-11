@@ -7,6 +7,8 @@ import {
   type LineRoundPayload,
   parseSummaryPayload,
   formatSummaryMessage,
+  parseReleasePayload,
+  formatReleaseMessage,
 } from "../../supabase/functions/line-notify/format";
 
 const valid = (): LineRoundPayload => ({
@@ -164,5 +166,61 @@ describe("session summary payload", () => {
   it("is not confused with round or booking payloads", () => {
     expect(parseBookingPayload(summary())).toBeNull();
     expect(parseSummaryPayload(valid())).toBeNull();
+  });
+});
+
+describe("court release payload", () => {
+  const release = () => ({
+    kind: "release" as const,
+    date: "8/15（土）",
+    court: "コート5",
+    yes: 7,
+    slots: [
+      { time: "10:00", ok: true },
+      { time: "11:00", ok: true },
+    ],
+  });
+
+  it("全部返せたら成功として出す", () => {
+    const p = parseReleasePayload(release())!;
+    const msg = formatReleaseMessage(p);
+    expect(msg).toContain("🟢 コート5 を返却しました");
+    expect(msg).toContain("📅 8/15（土）");
+    expect(msg).toContain("👥 参加◯ 7名");
+    expect(msg).toContain("✅ 10:00");
+  });
+
+  it("一部失敗は見出しで分かるようにする", () => {
+    // 失敗を成功に埋めると、残ったコートに誰も気づかず当日を迎える。
+    const p = parseReleasePayload({
+      ...release(),
+      slots: [{ time: "10:00", ok: true }, { time: "11:00", ok: false, reason: "該当なし" }],
+    })!;
+    const msg = formatReleaseMessage(p);
+    expect(msg).toContain("⚠️");
+    expect(msg).toContain("要手動確認");
+    expect(msg).toContain("❌ 11:00");
+    expect(msg).toContain("該当なし");
+  });
+
+  it("全部失敗も分かるようにする", () => {
+    const p = parseReleasePayload({
+      ...release(),
+      slots: [{ time: "10:00", ok: false, reason: "x" }],
+    })!;
+    expect(formatReleaseMessage(p)).toContain("❌ コート5 の返却に失敗");
+  });
+
+  it("壊れたペイロードは拒否する", () => {
+    expect(parseReleasePayload({ ...release(), slots: [] })).toBeNull();
+    expect(parseReleasePayload({ ...release(), yes: -1 })).toBeNull();
+    expect(parseReleasePayload({ ...release(), court: "" })).toBeNull();
+    expect(parseReleasePayload({ ...release(), slots: [{ time: "10:00" }] })).toBeNull();
+    expect(parseReleasePayload(valid())).toBeNull();
+  });
+
+  it("他の kind と取り違えない", () => {
+    expect(parseBookingPayload(release())).toBeNull();
+    expect(parseSummaryPayload(release())).toBeNull();
   });
 });
