@@ -25,7 +25,7 @@ export const DEFAULT_SHUFFLE_CONFIG: ShuffleConfig = {
 // (SAME_SESSION=30/pair). gap 1 (女女 vs 男女) is a soft nudge below a single
 // partner repeat. Numbers validated by the simulation in
 // tests/engine/gender-sim.test.ts.
-export const GENDER_GAP2: Record<RuleStrength, number> = { weak: 60, mid: 250, strong: 1000 };
+export const GENDER_GAP2: Record<RuleStrength, number> = { weak: 120, mid: 250, strong: 1000 };
 export const GENDER_GAP1: Record<RuleStrength, number> = { weak: 10, mid: 40, strong: 160 };
 
 // Multiplier applied to the same-session pair / opponent weights (axes ③④).
