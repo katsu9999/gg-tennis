@@ -45,7 +45,8 @@ export interface BuildOptions {
   config?: ShuffleConfig;
 }
 
-/** Same-session weight multipliers derived from the config (axes ③④). */
+/** Pair/opponent variety multipliers derived from the config (axes ③④).
+ *  Applied to both same-session counts and cross-session history. */
 interface Mult {
   pair: number;
   opp: number;
@@ -59,7 +60,10 @@ function multOf(config: ShuffleConfig | undefined): Mult {
 
 /** Matchup-level gender penalty: gap = |males(A) − males(B)|. gap 2 = 女女 vs
  *  男男 (effectively forbidden), gap 1 = 女女 vs 男女 (soft). A court with any
- *  unknown-gender player (incl. guests) is exempt — we can't judge it. */
+ *  unknown-gender player (incl. guests) is exempt — we can't judge it.
+ *  Singles courts are deliberately included: a 男 vs 女 singles match is the
+ *  most direct form of the power imbalance this rule exists to avoid, so it
+ *  carries the gap-1 penalty and same-gender singles are preferred. */
 function genderGapPenalty(
   a: readonly AttendeeRef[],
   b: readonly AttendeeRef[],

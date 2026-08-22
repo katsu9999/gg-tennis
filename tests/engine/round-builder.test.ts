@@ -127,6 +127,16 @@ describe("gender balance", () => {
     expect(scoreCourts(gap2Court, hist, ss, { genderOf, config: DEFAULT_SHUFFLE_CONFIG })).toBe(0);
   });
 
+  it("penalises mixed-gender singles (男 vs 女) and prefers same-gender singles", () => {
+    const hist = emptyHist();
+    const ss = { partner: new Map<string, number>(), opp: new Map<string, number>() };
+    const genderOf = genderMapOf([1, 2], [3, 4]);
+    const mixedSingles = [{ number: 1, type: "singles" as const, teamA: [ref(1)], teamB: [ref(3)], winner: "none" as const }];
+    const sameSingles = [{ number: 1, type: "singles" as const, teamA: [ref(1)], teamB: [ref(2)], winner: "none" as const }];
+    expect(scoreCourts(mixedSingles, hist, ss, { genderOf, config: cfg })).toBeGreaterThan(0);
+    expect(scoreCourts(sameSingles, hist, ss, { genderOf, config: cfg })).toBe(0);
+  });
+
   it("skips courts containing an unknown-gender player", () => {
     const hist = emptyHist();
     const ss = { partner: new Map<string, number>(), opp: new Map<string, number>() };

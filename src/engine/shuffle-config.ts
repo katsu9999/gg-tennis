@@ -28,7 +28,9 @@ export const DEFAULT_SHUFFLE_CONFIG: ShuffleConfig = {
 export const GENDER_GAP2: Record<RuleStrength, number> = { weak: 120, mid: 250, strong: 1000 };
 export const GENDER_GAP1: Record<RuleStrength, number> = { weak: 10, mid: 40, strong: 160 };
 
-// Multiplier applied to the same-session pair / opponent weights (axes ③④).
+// Multiplier applied to the pair / opponent variety weights (axes ③④) —
+// scales BOTH the same-session counts and the decayed cross-session history,
+// i.e. "avoid repeats" as a whole gets stronger or weaker.
 export const STRENGTH_MULT: Record<RuleStrength, number> = { weak: 0.5, mid: 1, strong: 2 };
 
 const STRENGTHS: readonly RuleStrength[] = ["weak", "mid", "strong"];
