@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
+import type { Gender } from "@/engine/models";
 import { rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { exportMemberData } from "@/data/gdpr-export";
@@ -100,6 +101,18 @@ async function doHardDelete(): Promise<void> {
   }
 }
 
+async function doSetGender(id: number, gender: Gender): Promise<void> {
+  busy.value = true;
+  error.value = null;
+  try {
+    await rosterStore.setGender(id, gender, requirePin());
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function doExport(id: number): Promise<void> {
   busy.value = true;
   error.value = null;
@@ -125,11 +138,13 @@ const ghostButtonStyle = {
 function MemberRow({
   id,
   name,
+  gender,
   isArchived,
   gate,
 }: {
   id: number;
   name: string;
+  gender: Gender;
   isArchived: boolean;
   gate(fn: () => void | Promise<void>): void;
 }) {
@@ -168,7 +183,24 @@ function MemberRow({
           {name}
         </span>
       )}
-      <span style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <span style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+        {!isRenaming && (
+          <select
+            data-testid={`gender-${id}`}
+            value={gender}
+            aria-label={t.roster.gender}
+            disabled={busy.value}
+            onChange={(e) => {
+              const v = (e.currentTarget as HTMLSelectElement).value as Gender;
+              gate(() => doSetGender(id, v));
+            }}
+            style={{ padding: "6px 4px", fontSize: 13, borderRadius: 8, border: "1.5px solid var(--line)", flexShrink: 0 }}
+          >
+            <option value="unknown">{t.roster.genderNone}</option>
+            <option value="male">{t.roster.genderMale}</option>
+            <option value="female">{t.roster.genderFemale}</option>
+          </select>
+        )}
         {isRenaming ? (
           <>
             <button
@@ -305,7 +337,7 @@ export function RosterPage() {
         <p class="muted">{t.roster.noActive}</p>
       ) : (
         rosterStore.active.value.map((m) => (
-          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={false} gate={gate} />
+          <MemberRow key={m.id} id={m.id} name={m.name} gender={m.gender} isArchived={false} gate={gate} />
         ))
       )}
 
@@ -316,7 +348,7 @@ export function RosterPage() {
         <p class="muted">{t.roster.noArchived}</p>
       ) : (
         rosterStore.archived.value.map((m) => (
-          <MemberRow key={m.id} id={m.id} name={m.name} isArchived={true} gate={gate} />
+          <MemberRow key={m.id} id={m.id} name={m.name} gender={m.gender} isArchived={true} gate={gate} />
         ))
       )}
 

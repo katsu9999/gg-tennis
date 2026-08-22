@@ -128,6 +128,10 @@ export const ja = {
     deleteConfirmSuffix: "されます。元に戻せません（GDPR §17.4 削除権）。",
     deleteConfirmData: " のデータ（会員情報・試合履歴・ペア履歴・RSVP）が",
     deleteAll: "すべて削除",
+    gender: "性別",
+    genderMale: "男",
+    genderFemale: "女",
+    genderNone: "未設定",
     deleteAction: "削除する",
   },
   past: {
@@ -280,6 +284,10 @@ export const en: Strings = {
     deleteAll: "permanently deleted",
     deleteConfirmSuffix: ". This cannot be undone.",
     deleteAction: "Delete",
+    gender: "Gender",
+    genderMale: "M",
+    genderFemale: "F",
+    genderNone: "—",
   },
   past: {
     title: "Past sessions",
