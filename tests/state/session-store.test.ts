@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSessionStore } from "@/state/session-store";
 import type { PairHistory } from "@/engine/models";
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 import type { SessionRepository, SessionRow } from "@/data/session-repository";
 import type { HistoryRepository } from "@/data/history-repository";
 import type { MatchLogRepository } from "@/data/match-log-repository";
@@ -601,5 +602,68 @@ describe("discardSession", () => {
     const store = createSessionStore(deps);
     await store.discardSession();
     expect(deps.sessionRepo.deleteOngoing).not.toHaveBeenCalled();
+  });
+});
+
+describe("shuffle config + gender (v1.6)", () => {
+  it("snapshots shuffleConfig + genders at start and persists shuffle_config", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({
+      ...baseInput,
+      memberIds: [1, 2, 3, 4],
+      shuffleConfig: { genderBalance: true, genderStrength: "strong", pairStrength: "mid", oppStrength: "mid" },
+      memberGenders: new Map([
+        [1, "male"],
+        [2, "male"],
+        [3, "female"],
+        [4, "female"],
+      ]),
+    });
+    const s = store.session.value!;
+    expect(s.shuffleConfig.genderBalance).toBe(true);
+    expect(s.attendees.find(a => a.ref.kind === "member" && a.ref.memberId === 3)?.gender).toBe("female");
+    const last = deps.upsertedRows[deps.upsertedRows.length - 1]!;
+    expect(last.shuffle_config).toMatchObject({ genderBalance: true, genderStrength: "strong" });
+  });
+
+  it("defaults to DEFAULT_SHUFFLE_CONFIG and unknown genders when input omits them", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession(baseInput);
+    const s = store.session.value!;
+    expect(s.shuffleConfig).toEqual(DEFAULT_SHUFFLE_CONFIG);
+    expect(s.attendees[0]!.gender).toBe("unknown");
+  });
+
+  it("defaults shuffleConfig for legacy rows on resume", async () => {
+    const deps = makeDeps();
+    deps.sessionRepo.loadOngoing = vi.fn().mockResolvedValue({
+      id: "sess-legacy",
+      status: "ongoing" as const,
+      planned_session_id: null,
+      date: "2026-05-31",
+      location: "Hendon",
+      court_count: 2,
+      allow_singles: false,
+      attendees: [
+        { ref: { kind: "member", memberId: 1 }, todayNumber: 1, isGuest: false },
+        { ref: { kind: "member", memberId: 2 }, todayNumber: 2, isGuest: false },
+      ],
+      rounds: [],
+      today_stats: {
+        '{"kind":"member","memberId":1}': { play: 0, rest: 0 },
+        '{"kind":"member","memberId":2}': { play: 0, rest: 0 },
+      },
+      next_today_number: 3,
+      current_round_index: -1,
+      created_at: "2026-05-31T08:00:00Z",
+      host_token: null,
+      host_label: null,
+      // no shuffle_config key — pre-v1.6 row
+    });
+    const store = createSessionStore(deps);
+    await store.resume();
+    expect(store.session.value!.shuffleConfig).toEqual(DEFAULT_SHUFFLE_CONFIG);
   });
 });

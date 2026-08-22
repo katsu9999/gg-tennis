@@ -1,3 +1,4 @@
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Member, Round } from "@/engine/models";
 
@@ -94,6 +95,7 @@ function makeSession(round: Round, resters: { kind: "member"; memberId: number }
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
   };
 }
 

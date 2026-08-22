@@ -1,3 +1,4 @@
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // vi.hoisted runs synchronously before the mock factory is hoisted,
@@ -87,6 +88,7 @@ describe("NumberMapPage", () => {
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("1")).toBeDefined();
@@ -114,6 +116,7 @@ describe("NumberMapPage", () => {
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
     };
     const { getByText } = render(<NumberMapPage />);
     expect(getByText("#99")).toBeDefined();
@@ -138,6 +141,7 @@ describe("NumberMapPage", () => {
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
     };
     const { getByText } = render(<NumberMapPage />);
     fireEvent.click(getByText(/ラウンド開始/));
@@ -166,6 +170,7 @@ describe("NumberMapPage", () => {
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
     };
     const { getByText } = render(<NumberMapPage />);
     fireEvent.click(getByText(/ラウンド開始/));
@@ -194,6 +199,7 @@ describe("NumberMapPage", () => {
       hostToken: null,
       hostLabel: null,
       createdAt: "2026-05-31T08:00:00.000Z",
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
     };
     sessionStore.generating.value = true;
     const { getByText } = render(<NumberMapPage />);
