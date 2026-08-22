@@ -86,6 +86,9 @@ export function createLocalMemberRepository(kv: KV): MemberRepository {
     async unarchive(id) {
       return mutateOne(id, { status: "active" });
     },
+    async setGender(id, gender) {
+      return mutateOne(id, { gender });
+    },
     async hardDelete(id) {
       await members.mutateRows((rows) => rows.filter((r) => r.id !== id));
       // Mirror the DB's ON DELETE CASCADE from members to pair_history.

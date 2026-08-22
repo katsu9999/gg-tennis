@@ -1,5 +1,5 @@
 import { computed, signal, type Signal, type ReadonlySignal } from "@preact/signals";
-import type { Member } from "@/engine/models";
+import type { Gender, Member } from "@/engine/models";
 import type { MemberRepository } from "@/data/member-repository";
 
 /**
@@ -15,6 +15,7 @@ export interface RosterStore {
   rename(id: number, name: string, pin: string): Promise<void>;
   archive(id: number, pin: string): Promise<void>;
   unarchive(id: number, pin: string): Promise<void>;
+  setGender(id: number, gender: Gender, pin: string): Promise<void>;
   hardDelete(id: number, pin: string): Promise<void>;
 }
 
@@ -48,6 +49,10 @@ export function createRosterStore(repo: MemberRepository): RosterStore {
     },
     async unarchive(id, pin) {
       const m = await repo.unarchive(id, pin);
+      replace(id, m);
+    },
+    async setGender(id, gender, pin) {
+      const m = await repo.setGender(id, gender, pin);
       replace(id, m);
     },
     async hardDelete(id, pin) {

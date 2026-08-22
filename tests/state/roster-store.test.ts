@@ -34,6 +34,10 @@ function makeRepo(): MemberRepository {
       ...members.find(m => m.id === id)!,
       status: "active" as const,
     })),
+    setGender: vi.fn().mockImplementation(async (id: number, gender: "male" | "female" | "unknown") => ({
+      ...members.find(m => m.id === id)!,
+      gender,
+    })),
     hardDelete: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -88,5 +92,21 @@ describe("roster store", () => {
     expect(store.all.value).toHaveLength(1);
     expect(store.all.value.find(m => m.id === 1)).toBeUndefined();
     expect(repo.hardDelete).toHaveBeenCalledWith(1, PIN);
+  });
+});
+
+describe("setGender (v1.6)", () => {
+  it("updates the member in place", async () => {
+    const repo = makeRepo();
+    repo.setGender = vi.fn().mockImplementation(async (id: number, gender: "male" | "female" | "unknown") => ({
+      ...members[0]!,
+      id,
+      gender,
+    }));
+    const store = createRosterStore(repo);
+    await store.load();
+    await store.setGender(1, "female", PIN);
+    expect(repo.setGender).toHaveBeenCalledWith(1, "female", PIN);
+    expect(store.all.value.find(m => m.id === 1)?.gender).toBe("female");
   });
 });
