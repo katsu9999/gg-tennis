@@ -4,10 +4,13 @@ export type AttendeeRef =
   | { kind: "member"; memberId: MemberId }
   | { kind: "guest"; guestId: GuestId };
 
+export type Gender = "male" | "female" | "unknown";
+
 export interface Member {
   id: MemberId;
   name: string;
   status: "active" | "archived";
+  gender: Gender;
   createdAt: Date;
 }
 
@@ -16,6 +19,9 @@ export interface Attendee {
   todayNumber: number;
   isGuest: boolean;
   guestName?: string;
+  /** Snapshotted from the member roster at session start (v1.6). Absent on
+   *  pre-v1.6 session rows — treat as "unknown". */
+  gender?: Gender;
 }
 
 export type CourtType = "doubles" | "singles";

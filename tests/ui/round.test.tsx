@@ -7,10 +7,10 @@ vi.mock("@/ui/stores", async () => {
   const { signal, computed } = await import("@preact/signals");
 
   const members: Member[] = [
-    { id: 1, name: "佐藤", status: "active", createdAt: new Date() },
-    { id: 2, name: "山本", status: "active", createdAt: new Date() },
-    { id: 3, name: "田中", status: "active", createdAt: new Date() },
-    { id: 4, name: "鈴木", status: "active", createdAt: new Date() },
+    { id: 1, name: "佐藤", status: "active", gender: "unknown", createdAt: new Date() },
+    { id: 2, name: "山本", status: "active", gender: "unknown", createdAt: new Date() },
+    { id: 3, name: "田中", status: "active", gender: "unknown", createdAt: new Date() },
+    { id: 4, name: "鈴木", status: "active", gender: "unknown", createdAt: new Date() },
   ];
 
   const allSignal = signal(members);

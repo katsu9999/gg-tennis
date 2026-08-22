@@ -14,6 +14,7 @@ const member: Member = {
   id: 1,
   name: "佐藤",
   status: "active",
+  gender: "unknown",
   createdAt: new Date("2026-01-01T00:00:00Z"),
 };
 

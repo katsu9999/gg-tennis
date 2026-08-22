@@ -11,6 +11,8 @@ interface MemberRow {
   id: number;
   name: string;
   status: "active" | "archived";
+  /** Absent on rows written before v1.6. */
+  gender?: "male" | "female" | "unknown";
   created_at: string;
 }
 
@@ -26,6 +28,7 @@ function toMember(row: MemberRow): Member {
     id: row.id,
     name: row.name,
     status: row.status,
+    gender: row.gender ?? "unknown",
     createdAt: new Date(row.created_at),
   };
 }
@@ -69,7 +72,7 @@ export function createLocalMemberRepository(kv: KV): MemberRepository {
       const nextId = await seq.next();
       let added!: MemberRow;
       await members.mutateRows((rows) => {
-        added = { id: nextId, name, status: "active", created_at: new Date().toISOString() };
+        added = { id: nextId, name, status: "active", gender: "unknown", created_at: new Date().toISOString() };
         return [...rows, added];
       });
       return toMember(added);

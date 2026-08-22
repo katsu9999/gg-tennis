@@ -24,6 +24,8 @@ interface MemberRow {
   id: number;
   name: string;
   status: string;
+  /** Absent until migration 0011 is applied. */
+  gender?: string;
   created_at: string;
 }
 
@@ -32,6 +34,7 @@ function toMember(row: MemberRow): Member {
     id: row.id,
     name: row.name,
     status: row.status as Member["status"],
+    gender: row.gender === "male" || row.gender === "female" ? row.gender : "unknown",
     createdAt: new Date(row.created_at),
   };
 }

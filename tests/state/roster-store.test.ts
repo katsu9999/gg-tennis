@@ -4,8 +4,8 @@ import type { Member } from "@/engine/models";
 import type { MemberRepository } from "@/data/member-repository";
 
 const members: Member[] = [
-  { id: 1, name: "A", status: "active", createdAt: new Date("2026-01-01") },
-  { id: 2, name: "B", status: "archived", createdAt: new Date("2026-01-02") },
+  { id: 1, name: "A", status: "active", gender: "unknown", createdAt: new Date("2026-01-01") },
+  { id: 2, name: "B", status: "archived", gender: "unknown", createdAt: new Date("2026-01-02") },
 ];
 
 const PIN = "test-pin";
@@ -18,6 +18,7 @@ function makeRepo(): MemberRepository {
       id: 99,
       name,
       status: "active",
+      gender: "unknown",
       createdAt: new Date(),
     })),
     rename: vi.fn().mockImplementation(async (id: number, name: string) => ({
