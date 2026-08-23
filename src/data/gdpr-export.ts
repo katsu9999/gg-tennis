@@ -156,11 +156,12 @@ export async function exportMemberData(memberId: number): Promise<void> {
     };
   });
 
-  const m = memberRes.data as { id: number; name: string; status: string; created_at: string };
+  const m = memberRes.data as { id: number; name: string; status: string; gender?: string; created_at: string };
   const member: Member = {
     id: m.id,
     name: m.name,
     status: m.status as Member["status"],
+    gender: m.gender === "male" || m.gender === "female" ? m.gender : "unknown",
     createdAt: new Date(m.created_at),
   };
 

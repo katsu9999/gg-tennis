@@ -24,8 +24,8 @@ vi.mock("@/ui/stores", async () => {
   const { signal, computed } = await import("@preact/signals");
 
   const members: Member[] = [
-    { id: 1, name: "佐藤", status: "active", createdAt: new Date() },
-    { id: 2, name: "山本", status: "active", createdAt: new Date() },
+    { id: 1, name: "佐藤", status: "active", gender: "unknown", createdAt: new Date() },
+    { id: 2, name: "山本", status: "active", gender: "unknown", createdAt: new Date() },
   ];
 
   const nextSig = signal<PlannedSessionRow | null>(null);

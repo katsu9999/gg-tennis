@@ -25,6 +25,8 @@ export interface SessionRow {
   host_token?: string | null;
   /** v1.1: display name supplied by the host (optional). */
   host_label?: string | null;
+  /** v1.6: shuffle rules snapshot (jsonb). Absent on pre-v1.6 rows. */
+  shuffle_config?: unknown;
 }
 
 export interface SessionRepository {

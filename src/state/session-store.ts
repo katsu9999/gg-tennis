@@ -1,6 +1,11 @@
 import { signal, type Signal } from "@preact/signals";
-import type { AttendeeRef, PairHistory, Round, SameSessionStats } from "@/engine/models";
+import type { AttendeeRef, Gender, PairHistory, Round, SameSessionStats } from "@/engine/models";
 import { memberIdsFrom, pairKey } from "@/engine/models";
+import {
+  DEFAULT_SHUFFLE_CONFIG,
+  normalizeShuffleConfig,
+  type ShuffleConfig,
+} from "@/engine/shuffle-config";
 import { planRound } from "@/engine/round-planner";
 import { selectResters } from "@/engine/rester-selector";
 import { buildRound } from "@/engine/round-builder";
@@ -27,7 +32,7 @@ export interface InMemorySession {
   location: string;
   courtCount: number;
   allowSingles: boolean;
-  attendees: { ref: AttendeeRef; todayNumber: number; isGuest: boolean; guestName?: string }[];
+  attendees: { ref: AttendeeRef; todayNumber: number; isGuest: boolean; guestName?: string; gender?: Gender }[];
   rounds: Round[];
   currentRoundIndex: number;
   /** Per-attendee play/rest/singles counts keyed by JSON.stringify(ref). */
@@ -36,6 +41,8 @@ export interface InMemorySession {
   /** Attendees who played singles in the current round — feeds singles-fairness. */
   prevSingles: AttendeeRef[];
   rngSeed: number;
+  /** v1.6: shuffle rules snapshot chosen on the new-session screen. */
+  shuffleConfig: ShuffleConfig;
   /** v1.1 Model A: LocalStorage token of whoever started the session. */
   hostToken: string | null;
   /** v1.1 Model A: display label for the host. */
@@ -57,6 +64,10 @@ export interface StartNewSessionInput {
   /** v1.1 Model A: identifies the device that's starting (label-only). */
   hostToken?: string | null;
   hostLabel?: string | null;
+  /** v1.6: shuffle rules chosen on the new-session screen. */
+  shuffleConfig?: ShuffleConfig;
+  /** v1.6: memberId → gender, snapshotted into attendees at start. */
+  memberGenders?: ReadonlyMap<number, Gender>;
 }
 
 export interface SessionStore {
@@ -111,6 +122,7 @@ function toSessionRow(s: InMemorySession): SessionRow {
     created_at: s.createdAt,
     host_token: s.hostToken,
     host_label: s.hostLabel,
+    shuffle_config: s.shuffleConfig,
   };
 }
 
@@ -170,6 +182,7 @@ export function createSessionStore(deps: {
       ref: { kind: "member" as const, memberId: id },
       todayNumber: i + 1,
       isGuest: false,
+      gender: input.memberGenders?.get(id) ?? "unknown",
     }));
 
     // 3. Initialise todayStats
@@ -194,6 +207,7 @@ export function createSessionStore(deps: {
       prevResters: [],
       prevSingles: [],
       rngSeed: deriveRngSeed(input.date),
+      shuffleConfig: input.shuffleConfig ? { ...input.shuffleConfig } : { ...DEFAULT_SHUFFLE_CONFIG },
       hostToken: input.hostToken ?? null,
       hostLabel: input.hostLabel ?? null,
       createdAt: new Date().toISOString(),
@@ -260,6 +274,8 @@ export function createSessionStore(deps: {
       singlesCount.set(key, stats.singles);
     }
     const prevSinglesSet = new Set(s.prevSingles.map(refKey));
+    const genderOf = new Map<string, Gender>();
+    for (const a of s.attendees) genderOf.set(refKey(a.ref), a.gender ?? "unknown");
     const { courts } = buildRound(
       seated,
       plan.doublesCourts,
@@ -269,6 +285,7 @@ export function createSessionStore(deps: {
       rng,
       singlesCount,
       prevSinglesSet,
+      { genderOf, config: s.shuffleConfig },
     );
 
     // 5. Assemble Round
@@ -489,6 +506,7 @@ export function createSessionStore(deps: {
       prevResters,
       prevSingles,
       rngSeed: deriveRngSeed(date),
+      shuffleConfig: normalizeShuffleConfig(row.shuffle_config),
       hostToken: row.host_token ?? null,
       hostLabel: row.host_label ?? null,
       createdAt: row.created_at,

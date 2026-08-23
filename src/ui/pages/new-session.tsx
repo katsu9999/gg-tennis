@@ -1,5 +1,12 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
+import type { Gender } from "@/engine/models";
+import {
+  DEFAULT_SHUFFLE_CONFIG,
+  normalizeShuffleConfig,
+  type RuleStrength,
+  type ShuffleConfig,
+} from "@/engine/shuffle-config";
 import { navigate, linkTo } from "@/ui/router";
 import { t } from "@/ui/i18n";
 import {
@@ -32,6 +39,28 @@ const error = signal<string | null>(null);
 /** Tracks the ?from=<plannedSessionId> query param. Set when preloading from a planned session. */
 const plannedSessionId = signal<string | null>(null);
 
+/** Shuffle rules — remembered across sessions on this device. */
+const RULES_STORAGE_KEY = "cs_shuffle_rules";
+
+function loadStoredRules(): ShuffleConfig {
+  try {
+    const raw = localStorage.getItem(RULES_STORAGE_KEY);
+    return normalizeShuffleConfig(raw ? JSON.parse(raw) : null);
+  } catch {
+    return { ...DEFAULT_SHUFFLE_CONFIG };
+  }
+}
+
+function storeRules(c: ShuffleConfig): void {
+  try {
+    localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(c));
+  } catch {
+    /* private mode etc. — non-fatal */
+  }
+}
+
+const rules = signal<ShuffleConfig>(loadStoredRules());
+
 /** Reset all form state to defaults. Called by tests in beforeEach. */
 export function resetFormState(): void {
   date.value = today();
@@ -43,6 +72,7 @@ export function resetFormState(): void {
   submitting.value = false;
   error.value = null;
   plannedSessionId.value = null;
+  rules.value = loadStoredRules();
 }
 
 function toggle(id: number): void {
@@ -93,8 +123,11 @@ async function submit(): Promise<void> {
       memberIds: [...selected.value],
       hostToken: hostStore.token.value,
       hostLabel: hostStore.label.value || null,
+      shuffleConfig: rules.value,
+      memberGenders: new Map<number, Gender>(rosterStore.active.value.map((m) => [m.id, m.gender])),
       ...(plannedSessionId.value ? { plannedSessionId: plannedSessionId.value } : {}),
     });
+    storeRules(rules.value);
     // Best-effort: delete the planned session it was derived from (PIN-gated;
     // skipped silently if PIN isn't unlocked — the planned session row will
     // just be left behind for the operator to clean up later).
@@ -114,6 +147,42 @@ async function submit(): Promise<void> {
   } finally {
     submitting.value = false;
   }
+}
+
+function StrengthPicker({ value, disabled, onChange }: {
+  value: RuleStrength;
+  disabled?: boolean;
+  onChange: (s: RuleStrength) => void;
+}) {
+  const opts: { key: RuleStrength; label: string }[] = [
+    { key: "weak", label: t.newSession.strengthWeak },
+    { key: "mid", label: t.newSession.strengthMid },
+    { key: "strong", label: t.newSession.strengthStrong },
+  ];
+  return (
+    <span style={{ display: "inline-flex", gap: 4, opacity: disabled ? 0.4 : 1 }}>
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(o.key)}
+          style={{
+            padding: "4px 10px",
+            fontSize: 13,
+            fontWeight: 700,
+            borderRadius: 8,
+            cursor: disabled ? "default" : "pointer",
+            border: `2px solid ${value === o.key ? "var(--ink)" : "var(--line)"}`,
+            background: value === o.key ? "var(--ink)" : "var(--card)",
+            color: value === o.key ? "#fff" : "var(--ink)",
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </span>
+  );
 }
 
 export function NewSessionPage() {
@@ -192,6 +261,40 @@ export function NewSessionPage() {
           />
           {" "}{t.newSession.allowSingles}
         </label>
+      </section>
+
+      <section class="card" style={{ marginBottom: 12 }}>
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.newSession.rulesTitle}</h3>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 14 }}>1. {t.newSession.ruleRest} <span class="muted">🔒</span></div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <label style={{ fontSize: 14 }}>
+              <input
+                type="checkbox"
+                data-testid="rule-gender"
+                checked={rules.value.genderBalance}
+                onInput={(e) => { rules.value = { ...rules.value, genderBalance: (e.currentTarget as HTMLInputElement).checked }; }}
+              />
+              {" "}2. ⚥ {t.newSession.ruleGender}
+            </label>
+            <StrengthPicker
+              value={rules.value.genderStrength}
+              disabled={!rules.value.genderBalance}
+              onChange={(s) => { rules.value = { ...rules.value, genderStrength: s }; }}
+            />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14 }}>3. {t.newSession.rulePair}</span>
+            <StrengthPicker value={rules.value.pairStrength} onChange={(s) => { rules.value = { ...rules.value, pairStrength: s }; }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14 }}>4. {t.newSession.ruleOpp}</span>
+            <StrengthPicker value={rules.value.oppStrength} onChange={(s) => { rules.value = { ...rules.value, oppStrength: s }; }} />
+          </div>
+          {rules.value.genderBalance && (
+            <p class="muted" style={{ margin: 0, fontSize: 12 }}>{t.newSession.ruleGenderHint}</p>
+          )}
+        </div>
       </section>
 
       <section class="card" style={{ marginBottom: 12 }}>

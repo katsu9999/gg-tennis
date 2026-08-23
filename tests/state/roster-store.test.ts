@@ -4,8 +4,8 @@ import type { Member } from "@/engine/models";
 import type { MemberRepository } from "@/data/member-repository";
 
 const members: Member[] = [
-  { id: 1, name: "A", status: "active", createdAt: new Date("2026-01-01") },
-  { id: 2, name: "B", status: "archived", createdAt: new Date("2026-01-02") },
+  { id: 1, name: "A", status: "active", gender: "unknown", createdAt: new Date("2026-01-01") },
+  { id: 2, name: "B", status: "archived", gender: "unknown", createdAt: new Date("2026-01-02") },
 ];
 
 const PIN = "test-pin";
@@ -18,6 +18,7 @@ function makeRepo(): MemberRepository {
       id: 99,
       name,
       status: "active",
+      gender: "unknown",
       createdAt: new Date(),
     })),
     rename: vi.fn().mockImplementation(async (id: number, name: string) => ({
@@ -32,6 +33,10 @@ function makeRepo(): MemberRepository {
     unarchive: vi.fn().mockImplementation(async (id: number) => ({
       ...members.find(m => m.id === id)!,
       status: "active" as const,
+    })),
+    setGender: vi.fn().mockImplementation(async (id: number, gender: "male" | "female" | "unknown") => ({
+      ...members.find(m => m.id === id)!,
+      gender,
     })),
     hardDelete: vi.fn().mockResolvedValue(undefined),
   };
@@ -87,5 +92,21 @@ describe("roster store", () => {
     expect(store.all.value).toHaveLength(1);
     expect(store.all.value.find(m => m.id === 1)).toBeUndefined();
     expect(repo.hardDelete).toHaveBeenCalledWith(1, PIN);
+  });
+});
+
+describe("setGender (v1.6)", () => {
+  it("updates the member in place", async () => {
+    const repo = makeRepo();
+    repo.setGender = vi.fn().mockImplementation(async (id: number, gender: "male" | "female" | "unknown") => ({
+      ...members[0]!,
+      id,
+      gender,
+    }));
+    const store = createRosterStore(repo);
+    await store.load();
+    await store.setGender(1, "female", PIN);
+    expect(repo.setGender).toHaveBeenCalledWith(1, "female", PIN);
+    expect(store.all.value.find(m => m.id === 1)?.gender).toBe("female");
   });
 });

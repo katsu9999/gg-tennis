@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Member } from "@/engine/models";
+import type { Gender, Member } from "@/engine/models";
 
 /**
  * v1.1 Model A: all mutating methods are gated by the club PIN.
@@ -16,6 +16,8 @@ export interface MemberRepository {
   rename(id: number, name: string, pin: string): Promise<Member>;
   archive(id: number, pin: string): Promise<Member>;
   unarchive(id: number, pin: string): Promise<Member>;
+  /** v1.6: set 男/女/未設定 for the gender-balance shuffle. */
+  setGender(id: number, gender: Gender, pin: string): Promise<Member>;
   /** GDPR §17.4 right-to-erasure. Cascades to pair_history, match_log via DB FKs. */
   hardDelete(id: number, pin: string): Promise<void>;
 }
@@ -24,6 +26,8 @@ interface MemberRow {
   id: number;
   name: string;
   status: string;
+  /** Absent until migration 0011 is applied. */
+  gender?: string;
   created_at: string;
 }
 
@@ -32,6 +36,7 @@ function toMember(row: MemberRow): Member {
     id: row.id,
     name: row.name,
     status: row.status as Member["status"],
+    gender: row.gender === "male" || row.gender === "female" ? row.gender : "unknown",
     createdAt: new Date(row.created_at),
   };
 }
@@ -66,6 +71,7 @@ export function createMemberRepository(
         p_id: null,
         p_name: name,
         p_status: "active",
+        p_gender: "unknown",
       });
       if (error) throw error;
       return fetchMember(supabase, data as number);
@@ -77,6 +83,7 @@ export function createMemberRepository(
         p_id: id,
         p_name: name,
         p_status: current.status,
+        p_gender: current.gender,
       });
       if (error) throw error;
       return fetchMember(supabase, id);
@@ -88,6 +95,7 @@ export function createMemberRepository(
         p_id: id,
         p_name: current.name,
         p_status: "archived",
+        p_gender: current.gender,
       });
       if (error) throw error;
       return fetchMember(supabase, id);
@@ -99,6 +107,19 @@ export function createMemberRepository(
         p_id: id,
         p_name: current.name,
         p_status: "active",
+        p_gender: current.gender,
+      });
+      if (error) throw error;
+      return fetchMember(supabase, id);
+    },
+    async setGender(id, gender, pin) {
+      const current = await fetchMember(supabase, id);
+      const { error } = await supabase.rpc("upsert_member", {
+        p_pin: pin,
+        p_id: id,
+        p_name: current.name,
+        p_status: current.status,
+        p_gender: gender,
       });
       if (error) throw error;
       return fetchMember(supabase, id);

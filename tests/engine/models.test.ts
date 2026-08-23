@@ -4,7 +4,7 @@ import { pairKey } from "@/engine/models";
 
 describe("domain models", () => {
   it("Member has stable identity and status union", () => {
-    const m: Member = { id: 1, name: "佐藤", status: "active", createdAt: new Date("2026-01-01") };
+    const m: Member = { id: 1, name: "佐藤", status: "active", gender: "unknown", createdAt: new Date("2026-01-01") };
     expect(m.status).toBe("active");
   });
 

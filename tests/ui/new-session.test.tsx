@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Member } from "@/engine/models";
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 
 // vi.hoisted runs synchronously before the mock factory is hoisted,
 // allowing us to share mutable state between the factory and test bodies.
@@ -30,9 +31,9 @@ vi.mock("@/ui/stores", async () => {
   const { signal, computed } = await import("@preact/signals");
 
   const members: Member[] = [
-    { id: 1, name: "佐藤", status: "active", createdAt: new Date() },
-    { id: 2, name: "山本", status: "active", createdAt: new Date() },
-    { id: 3, name: "田中", status: "active", createdAt: new Date() },
+    { id: 1, name: "佐藤", status: "active", gender: "male", createdAt: new Date() },
+    { id: 2, name: "山本", status: "active", gender: "female", createdAt: new Date() },
+    { id: 3, name: "田中", status: "active", gender: "unknown", createdAt: new Date() },
   ];
 
   const allSignal = signal<Member[]>(members);
@@ -182,6 +183,9 @@ describe("NewSessionPage", () => {
       allowSingles: true,
       hostToken: "host-token-123",
       hostLabel: "Katsu",
+      // v1.6: shuffle rules + roster genders are forwarded to the store.
+      shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
+      memberGenders: new Map([[1, "male"], [2, "female"], [3, "unknown"]]),
     }));
     // navigate() is called after the async venueRepo.add() resolves, so wait for it.
     await waitFor(() => expect(currentPath.value).toBe("/session/number-map"));

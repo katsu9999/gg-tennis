@@ -8,6 +8,7 @@
  * rankingStore.load() unconditionally on mount — undefined stores would
  * crash at startup.
  */
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/preact";
@@ -89,6 +90,7 @@ function ongoingSession(): InMemorySession {
     hostToken: null,
     hostLabel: null,
     createdAt: "2026-05-31T08:00:00.000Z",
+    shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
   };
 }
 

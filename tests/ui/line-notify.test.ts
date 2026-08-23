@@ -1,3 +1,4 @@
+import { DEFAULT_SHUFFLE_CONFIG } from "@/engine/shuffle-config";
 import { describe, expect, it, vi } from "vitest";
 
 // line-notify imports @/ui/stores for offerLineNotify; the real composition
@@ -34,6 +35,7 @@ function makeSession(rounds: Round[], currentRoundIndex: number): InMemorySessio
     hostToken: null,
     hostLabel: null,
     createdAt: "2026-08-02T09:00:00.000Z",
+    shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
   };
 }
 

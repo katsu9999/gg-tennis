@@ -1,7 +1,15 @@
-import type { AttendeeRef, Court, PairHistory, SameSessionStats } from "./models";
+import type { AttendeeRef, Court, Gender, PairHistory, SameSessionStats } from "./models";
 import { memberIdsFrom, pairKey } from "./models";
 import type { Rng } from "./rng";
 import { shuffle } from "./rng";
+import {
+  DEFAULT_SHUFFLE_CONFIG,
+  GENDER_GAP1,
+  GENDER_GAP2,
+  STRENGTH_MULT,
+  type GenderMap,
+  type ShuffleConfig,
+} from "./shuffle-config";
 
 // Tuned for the GG club's typical 2h night: 3 doubles courts, 8-12 players,
 // 5-6 rounds. With so few rounds, intra-session variety is the only thing
@@ -31,6 +39,56 @@ const SINGLES_PREV = 8;
 
 const refKeyOf = (r: AttendeeRef): string => JSON.stringify(r);
 
+export interface BuildOptions {
+  /** JSON.stringify(ref) → gender. Missing entries count as "unknown". */
+  genderOf?: GenderMap;
+  config?: ShuffleConfig;
+}
+
+/** Pair/opponent variety multipliers derived from the config (axes ③④).
+ *  Applied to both same-session counts and cross-session history. */
+interface Mult {
+  pair: number;
+  opp: number;
+}
+const UNIT_MULT: Mult = { pair: 1, opp: 1 };
+
+function multOf(config: ShuffleConfig | undefined): Mult {
+  if (!config) return UNIT_MULT;
+  return { pair: STRENGTH_MULT[config.pairStrength], opp: STRENGTH_MULT[config.oppStrength] };
+}
+
+/** Matchup-level gender penalty: gap = |males(A) − males(B)|. gap 2 = 女女 vs
+ *  男男 (effectively forbidden), gap 1 = 女女 vs 男女 (soft). A court with any
+ *  unknown-gender player (incl. guests) is exempt — we can't judge it.
+ *  Singles courts are deliberately included: a 男 vs 女 singles match is the
+ *  most direct form of the power imbalance this rule exists to avoid, so it
+ *  carries the gap-1 penalty and same-gender singles are preferred. */
+function genderGapPenalty(
+  a: readonly AttendeeRef[],
+  b: readonly AttendeeRef[],
+  opts: BuildOptions,
+): number {
+  const config = opts.config ?? DEFAULT_SHUFFLE_CONFIG;
+  if (!config.genderBalance || !opts.genderOf) return 0;
+  let malesA = 0;
+  let malesB = 0;
+  for (const r of a) {
+    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
+    if (g === "unknown") return 0;
+    if (g === "male") malesA++;
+  }
+  for (const r of b) {
+    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
+    if (g === "unknown") return 0;
+    if (g === "male") malesB++;
+  }
+  const gap = Math.abs(malesA - malesB);
+  if (gap >= 2) return GENDER_GAP2[config.genderStrength];
+  if (gap === 1) return GENDER_GAP1[config.genderStrength];
+  return 0;
+}
+
 /** Penalty for the two players placed on a singles court, based on how often
  *  they've already played singles today and whether they did so last round. */
 function singlesCourtPenalty(
@@ -47,42 +105,45 @@ function singlesCourtPenalty(
   return s;
 }
 
-function teamPairScore(team: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): number {
+function teamPairScore(team: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats, mult: Mult = UNIT_MULT): number {
   const ids = memberIdsFrom(team);
   let s = 0;
   for (let i = 0; i < ids.length; i++)
     for (let j = i + 1; j < ids.length; j++) {
       const key = pairKey(ids[i]!, ids[j]!);
-      s += W_PARTNER * (hist.partnerW.get(key) ?? 0);
-      s += SAME_SESSION * (ss.partner.get(key) ?? 0);
+      s += mult.pair * W_PARTNER * (hist.partnerW.get(key) ?? 0);
+      s += mult.pair * SAME_SESSION * (ss.partner.get(key) ?? 0);
     }
   return s;
 }
 
-function oppScore(a: readonly AttendeeRef[], b: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): number {
+function oppScore(a: readonly AttendeeRef[], b: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats, mult: Mult = UNIT_MULT): number {
   const ai = memberIdsFrom(a);
   const bi = memberIdsFrom(b);
   let s = 0;
   for (const x of ai)
     for (const y of bi) {
       const key = pairKey(x, y);
-      s += W_OPP * (hist.opponentW.get(key) ?? 0);
-      s += SAME_SESSION_OPP * (ss.opp.get(key) ?? 0);
+      s += mult.opp * W_OPP * (hist.opponentW.get(key) ?? 0);
+      s += mult.opp * SAME_SESSION_OPP * (ss.opp.get(key) ?? 0);
     }
   return s;
 }
 
-export function scoreCourts(courts: readonly Court[], hist: PairHistory, ss: SameSessionStats): number {
+export function scoreCourts(courts: readonly Court[], hist: PairHistory, ss: SameSessionStats, opts: BuildOptions = {}): number {
+  const mult = multOf(opts.config);
   let s = 0;
   for (const c of courts) {
-    s += teamPairScore(c.teamA, hist, ss);
-    s += teamPairScore(c.teamB, hist, ss);
-    s += oppScore(c.teamA, c.teamB, hist, ss);
+    s += teamPairScore(c.teamA, hist, ss, mult);
+    s += teamPairScore(c.teamB, hist, ss, mult);
+    s += oppScore(c.teamA, c.teamB, hist, ss, mult);
+    s += genderGapPenalty(c.teamA, c.teamB, opts);
   }
   return s;
 }
 
-function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats): [AttendeeRef[], AttendeeRef[]] {
+function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats, opts: BuildOptions): [AttendeeRef[], AttendeeRef[]] {
+  const mult = multOf(opts.config);
   const [a, b, c, d] = four;
   const candidates: [AttendeeRef[], AttendeeRef[]][] = [
     [[a!, b!], [c!, d!]],
@@ -92,7 +153,11 @@ function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameS
   let best = candidates[0]!;
   let bestS = Infinity;
   for (const [A, B] of candidates) {
-    const s = teamPairScore(A, hist, ss) + teamPairScore(B, hist, ss) + oppScore(A, B, hist, ss);
+    const s =
+      teamPairScore(A, hist, ss, mult) +
+      teamPairScore(B, hist, ss, mult) +
+      oppScore(A, B, hist, ss, mult) +
+      genderGapPenalty(A, B, opts);
     if (s < bestS) {
       bestS = s;
       best = [A, B];
@@ -116,6 +181,7 @@ export function buildRound(
   rng: Rng,
   singlesCount: ReadonlyMap<string, number> = new Map(),
   prevSingles: ReadonlySet<string> = new Set(),
+  opts: BuildOptions = {},
 ): { courts: Court[] } {
   let best: Court[] | null = null;
   let bestScore = Infinity;
@@ -127,7 +193,7 @@ export function buildRound(
     for (let i = 0; i < doublesCourts; i++) {
       const four = s.slice(idx, idx + 4);
       idx += 4;
-      const [A, B] = bestSplitOf4(four, hist, ss);
+      const [A, B] = bestSplitOf4(four, hist, ss, opts);
       courts.push({ number: courts.length + 1, type: "doubles", teamA: A, teamB: B, winner: "none" });
     }
     let singlesPenalty = 0;
@@ -137,7 +203,7 @@ export function buildRound(
       singlesPenalty += singlesCourtPenalty(two, singlesCount, prevSingles);
       courts.push({ number: courts.length + 1, type: "singles", teamA: [two[0]!], teamB: [two[1]!], winner: "none" });
     }
-    const sc = scoreCourts(courts, hist, ss) + singlesPenalty;
+    const sc = scoreCourts(courts, hist, ss, opts) + singlesPenalty;
     if (sc < bestScore) {
       bestScore = sc;
       best = courts;
