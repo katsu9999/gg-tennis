@@ -224,3 +224,73 @@ describe("court release payload", () => {
     expect(parseSummaryPayload(release())).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Multi-court booking (GG Booker sends all accounts in one message)
+// ---------------------------------------------------------------------------
+//
+// LINE の無料枠はメッセージ数×人数で減る。1アカウント1通で送ると
+// 3コート＝3通（グループ約19人で57通）。1通にまとめるため、slot ごとに
+// どのコートかを持たせる。Hendon はコート系統ごとにゲートPINが違うので、
+// コートを落とすと誰がどのPINを使うのか分からなくなる。
+describe("multi-court booking", () => {
+  const multi = () => ({
+    kind: "booking",
+    date: "9/5（土）",
+    start: "11:00",
+    end: "13:00",
+    court: "コート1・5・6",
+    account: "GG Booker",
+    slots: [
+      { court: "コート1", start: "11:00", end: "12:00", gatePin: "4630679" },
+      { court: "コート1", start: "12:00", end: "13:00", gatePin: "8964630" },
+      { court: "コート5", start: "11:00", end: "12:00", gatePin: "2883751" },
+      { court: "コート5", start: "12:00", end: "13:00", gatePin: "6107822" },
+    ],
+  });
+
+  it("keeps the court on every slot", () => {
+    const p = parseBookingPayload(multi())!;
+    expect(p).not.toBeNull();
+    expect(p.slots!.map((s) => s.court)).toEqual([
+      "コート1", "コート1", "コート5", "コート5",
+    ]);
+  });
+
+  it("groups the gate PINs under each court", () => {
+    const text = formatBookingMessage(parseBookingPayload(multi())!);
+    expect(text).toContain("【コート1】");
+    expect(text).toContain("【コート5】");
+    expect(text).toContain("・11:00〜12:00：4630679");
+    expect(text).toContain("・11:00〜12:00：2883751");
+    // コート1の見出しはコート5より先に出る
+    expect(text.indexOf("【コート1】")).toBeLessThan(text.indexOf("【コート5】"));
+  });
+
+  it("still renders a flat list when slots carry no court", () => {
+    const p = parseBookingPayload({
+      kind: "booking", date: "9/5（土）", start: "11:00", end: "13:00",
+      court: "コート5", account: "ReturnAce",
+      slots: [{ start: "11:00", end: "12:00", gatePin: "111" }],
+    })!;
+    const text = formatBookingMessage(p);
+    expect(text).toContain("・11:00〜12:00：111");
+    expect(text).not.toContain("【");
+  });
+
+  it("accepts 3 courts x 3 hours (9 slots)", () => {
+    const slots = [];
+    for (const c of ["コート1", "コート5", "コート6"]) {
+      for (const h of ["11:00", "12:00", "13:00"]) {
+        slots.push({ court: c, start: h, end: h, gatePin: "1" });
+      }
+    }
+    expect(parseBookingPayload({ ...multi(), slots })).not.toBeNull();
+  });
+
+  it("rejects a slot whose court is not a string", () => {
+    const bad = multi();
+    (bad.slots[0] as Record<string, unknown>).court = 5;
+    expect(parseBookingPayload(bad)).toBeNull();
+  });
+});

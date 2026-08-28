@@ -129,9 +129,16 @@ export interface LineBookingSlot {
   start: string;
   end: string;
   gatePin?: string;
+  /**
+   * Which court this hour belongs to, e.g. "コート5". Present when GG Booker
+   * sends every account's bookings in one message (Hendon issues a different
+   * PIN per court group, so a flat PIN list would be unusable).
+   */
+  court?: string;
 }
 
-const MAX_SLOTS = 8;
+// 3コート×3時間＝9枠まで想定し、余裕をみて24。
+const MAX_SLOTS = 24;
 
 function parseSlots(raw: unknown): LineBookingSlot[] | null | undefined {
   if (raw === undefined) return undefined;
@@ -144,6 +151,11 @@ function parseSlots(raw: unknown): LineBookingSlot[] | null | undefined {
     const end = cleanField(s.end, 10);
     if (!start || !end) return null;
     const slot: LineBookingSlot = { start, end };
+    if (s.court !== undefined) {
+      const court = cleanField(s.court, 30);
+      if (!court) return null;
+      slot.court = court;
+    }
     // 空文字は「PIN なし」の意味で送られてくる。欠落と同じ扱いにする。
     if (typeof s.gatePin === "string" && s.gatePin.trim() !== "") {
       const pin = cleanField(s.gatePin, 12);
@@ -206,7 +218,21 @@ export function formatBookingMessage(p: LineBookingPayload): string {
   const withPins = (p.slots ?? []).filter((s) => s.gatePin);
   if (withPins.length > 0) {
     lines.push("", "🔑 ゲートPIN");
-    for (const s of withPins) lines.push(`・${s.start}〜${s.end}：${s.gatePin}`);
+    // 複数コートをまとめて送るときはコート見出しで束ねる。PIN はコート系統
+    // ごとに違うので、平らに並べるとどれを使うのか分からない。
+    if (withPins.some((s) => s.court)) {
+      let current = "";
+      for (const s of withPins) {
+        const court = s.court ?? "";
+        if (court !== current) {
+          lines.push(`【${court}】`);
+          current = court;
+        }
+        lines.push(`・${s.start}〜${s.end}：${s.gatePin}`);
+      }
+    } else {
+      for (const s of withPins) lines.push(`・${s.start}〜${s.end}：${s.gatePin}`);
+    }
   } else if (p.gatePin) {
     lines.push(`🔑 ゲート：${p.gatePin}`);
   }
