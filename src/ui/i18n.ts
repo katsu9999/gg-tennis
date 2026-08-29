@@ -52,6 +52,11 @@ export const ja = {
     lineSendConfirm: (roundNo: number) =>
       `R${roundNo} の組み合わせをLINEグループに送りますか？`,
     lineSendNow: "このラウンドをLINEに送る",
+    generateAll: (n: number) => `${n}ラウンド分まとめて作成`,
+    generateAllConfirm: (n: number) =>
+      `${n}ラウンド分の組み合わせをまとめて作り、LINEに1通で送ります。\n早く終わった場合は「セッション終了」を押したラウンドまでが記録されます。`,
+    lineAllRoundsConfirm: (n: number) =>
+      `全${n}ラウンドの組み合わせをLINEグループに1通で送りますか？`,
     lineSummaryConfirm: "今日の成績をLINEグループに送りますか？",
     lineSendFailed: (msg: string) =>
       `LINEへの送信に失敗しました:\n${msg}\n（ラウンドはこのまま進められます）`,
@@ -217,6 +222,11 @@ export const en: Strings = {
     endFailed: (msg: string) => `Failed to end the session:\n${msg}`,
     lineSendConfirm: (roundNo: number) => `Send the R${roundNo} assignments to the LINE group?`,
     lineSendNow: "Send this round to LINE",
+    generateAll: (n: number) => `Generate all ${n} rounds`,
+    generateAllConfirm: (n: number) =>
+      `Generate ${n} rounds at once and send them to LINE in a single message.\nIf the night ends early, only the rounds up to where you press "End session" are kept.`,
+    lineAllRoundsConfirm: (n: number) =>
+      `Send all ${n} rounds to the LINE group in one message?`,
     lineSummaryConfirm: "Send today's standings to the LINE group?",
     lineSendFailed: (msg: string) =>
       `Failed to send to LINE:\n${msg}\n(You can keep playing — the round is unaffected.)`,

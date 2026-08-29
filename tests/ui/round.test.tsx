@@ -37,6 +37,10 @@ vi.mock("@/ui/stores", async () => {
       goToPreviousRound: vi.fn(),
       recordWinner: vi.fn().mockResolvedValue(undefined),
       endSession: vi.fn(),
+      // 「セッション終了」は今いるラウンドで締める版を呼ぶ（先出しした未実施
+      // ラウンドを捨てるため）。2026-08-28 に endSession から切り替え。
+      endSessionAtCurrentRound: vi.fn(),
+      generateRounds: vi.fn(),
       discardSession: vi.fn().mockResolvedValue(undefined),
       resume: vi.fn().mockResolvedValue(undefined),
     },
@@ -104,6 +108,7 @@ beforeEach(async () => {
   vi.mocked(sessionStore.nextRound).mockClear();
   vi.mocked(sessionStore.goToPreviousRound).mockClear();
   vi.mocked(sessionStore.endSession).mockClear();
+  vi.mocked(sessionStore.endSessionAtCurrentRound).mockClear();
   vi.mocked(sessionStore.discardSession).mockClear();
   sessionStore.session.value = null;
   sessionStore.generating.value = false;
@@ -181,7 +186,7 @@ describe("RoundPage", () => {
     sessionStore.session.value = makeSession(round);
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("end-session-btn"));
-    await waitFor(() => expect(sessionStore.endSession).toHaveBeenCalled());
+    await waitFor(() => expect(sessionStore.endSessionAtCurrentRound).toHaveBeenCalled());
     expect(confirmSpy).toHaveBeenCalled();
     expect(sessionStore.discardSession).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
@@ -193,7 +198,7 @@ describe("RoundPage", () => {
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("end-session-btn"));
     await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
-    expect(sessionStore.endSession).not.toHaveBeenCalled();
+    expect(sessionStore.endSessionAtCurrentRound).not.toHaveBeenCalled();
     expect(sessionStore.discardSession).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
@@ -204,7 +209,7 @@ describe("RoundPage", () => {
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("end-session-btn"));
     await waitFor(() => expect(sessionStore.discardSession).toHaveBeenCalled());
-    expect(sessionStore.endSession).not.toHaveBeenCalled();
+    expect(sessionStore.endSessionAtCurrentRound).not.toHaveBeenCalled();
     expect(confirmSpy.mock.calls[0]![0]).toMatch(/破棄しますか/);
     confirmSpy.mockRestore();
   });
@@ -217,7 +222,7 @@ describe("RoundPage", () => {
     sessionStore.session.value = makeSession(makeRound());
     const { getByTestId } = render(<RoundPage />);
     fireEvent.click(getByTestId("end-session-btn"));
-    await waitFor(() => expect(sessionStore.endSession).toHaveBeenCalled());
+    await waitFor(() => expect(sessionStore.endSessionAtCurrentRound).toHaveBeenCalled());
     expect(sessionStore.discardSession).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });

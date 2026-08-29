@@ -101,6 +101,65 @@ export function formatRoundMessage(p: LineRoundPayload): string {
 }
 
 // ---------------------------------------------------------------------------
+// All rounds in one message (GG Shuffle → LINE, at the start of the night)
+// ---------------------------------------------------------------------------
+//
+// 1ラウンド1通だと 2時間6ラウンドで6メッセージ。LINE の無料枠は
+// メッセージ数×人数で減るので、グループ(約19人)では114通/回になる。
+// 夜のぶんを先に組んで1通で流す。早く終わった夜は残りを使わないだけ。
+
+export interface LineRoundsPayload {
+  kind: "rounds";
+  rounds: LineRoundPayload[];
+}
+
+const MAX_ROUNDS = 12;
+
+export function parseRoundsPayload(body: unknown): LineRoundsPayload | null {
+  if (typeof body !== "object" || body === null) return null;
+  const b = body as Record<string, unknown>;
+  if (b.kind !== "rounds") return null;
+  if (!Array.isArray(b.rounds) || b.rounds.length === 0 || b.rounds.length > MAX_ROUNDS) {
+    return null;
+  }
+  const rounds: LineRoundPayload[] = [];
+  for (const raw of b.rounds) {
+    const r = parsePayload(raw);
+    if (!r) return null;
+    rounds.push(r);
+  }
+  return { kind: "rounds", rounds };
+}
+
+/** Render the whole night:
+ *
+ *   🎾 今日の組み合わせ（全6ラウンド）
+ *
+ *   ━━ R1 ━━
+ *   🟢 コート1
+ *   ①田中・②佐藤 vs ③山本・④鈴木
+ *   💤 休憩：⑦高田
+ *
+ *   ━━ R2 ━━
+ *   …
+ */
+export function formatRoundsMessage(p: LineRoundsPayload): string {
+  const blocks: string[] = [`🎾 今日の組み合わせ（全${p.rounds.length}ラウンド）`];
+  for (const r of p.rounds) {
+    const lines = [`━━ R${r.roundNo} ━━`];
+    for (const c of r.courts) {
+      const suffix = c.type === "singles" ? "（シングルス）" : "";
+      const mark = COURT_MARKS[(c.number - 1) % COURT_MARKS.length];
+      lines.push(`${mark} コート${c.number}${suffix}`);
+      lines.push(`${c.teamA.join("・")} vs ${c.teamB.join("・")}`);
+    }
+    if (r.resters.length > 0) lines.push(`💤 休憩：${r.resters.join("・")}`);
+    blocks.push(lines.join("\n"));
+  }
+  return blocks.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
 // Booking result (GG Booker → LINE)
 // ---------------------------------------------------------------------------
 

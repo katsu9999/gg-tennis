@@ -20,6 +20,8 @@ import {
   formatRoundMessage,
   parseBookingPayload,
   formatBookingMessage,
+  parseRoundsPayload,
+  formatRoundsMessage,
   parseSummaryPayload,
   formatSummaryMessage,
   parseReleasePayload,
@@ -130,8 +132,10 @@ Deno.serve(async (req) => {
   const booking = parseBookingPayload(body);
   const summary = booking ? null : parseSummaryPayload(body);
   const release = booking || summary ? null : parseReleasePayload(body);
-  const round = booking || summary || release ? null : parsePayload(body);
-  if (!booking && !summary && !release && !round) {
+  // 夜のぶんをまとめた "rounds" は単発の round より先に判定する（kind で排他）。
+  const allRounds = booking || summary || release ? null : parseRoundsPayload(body);
+  const round = booking || summary || release || allRounds ? null : parsePayload(body);
+  if (!booking && !summary && !release && !allRounds && !round) {
     return json(400, { error: "invalid_payload" });
   }
   const text = booking
@@ -140,7 +144,9 @@ Deno.serve(async (req) => {
       ? formatSummaryMessage(summary)
       : release
         ? formatReleaseMessage(release)
-        : formatRoundMessage(round!);
+        : allRounds
+          ? formatRoundsMessage(allRounds)
+          : formatRoundMessage(round!);
 
   const messages: Record<string, unknown>[] = [{ type: "text", text }];
 

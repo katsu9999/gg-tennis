@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 // buildRoundPayload is under test here — stub the stores out.
 vi.mock("@/ui/stores", () => ({ sessionStore: {}, rosterStore: {} }));
 
-import { buildRoundPayload, buildSummaryPayload } from "@/ui/line-notify";
+import { buildAllRoundsPayload, buildRoundPayload, buildSummaryPayload } from "@/ui/line-notify";
 import type { InMemorySession } from "@/state/session-store";
 import type { Round } from "@/engine/models";
 
@@ -188,5 +188,26 @@ describe("buildSummaryPayload — 成績ゼロは送らない", () => {
       },
     ] as never as Round[];
     expect(buildSummaryPayload(makeSession(rounds, 0), M)).not.toBeNull();
+  });
+});
+
+describe("buildAllRoundsPayload", () => {
+  it("packs every generated round into one payload", () => {
+    const r2: Round = { ...round, index: 1 };
+    const s = makeSession([round, r2], 0);
+    const p = buildAllRoundsPayload(s, new Map([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "高田"]]))!;
+    expect(p.kind).toBe("rounds");
+    expect(p.rounds.map((r) => r.roundNo)).toEqual([1, 2]);
+  });
+
+  it("labels players the same way as the single-round message", () => {
+    const s = makeSession([round], 0);
+    const names = new Map([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "高田"]]);
+    const all = buildAllRoundsPayload(s, names)!;
+    expect(all.rounds[0]).toEqual(buildRoundPayload(s, names));
+  });
+
+  it("returns null when nothing has been generated", () => {
+    expect(buildAllRoundsPayload(makeSession([], -1), new Map())).toBeNull();
   });
 });

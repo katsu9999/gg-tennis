@@ -77,9 +77,14 @@ export interface SessionStore {
   generating: Signal<boolean>;
   startNewSession(input: StartNewSessionInput): Promise<void>;
   nextRound(): Promise<void>;
+  /** 夜のぶんをまとめて組む（LINEに1通で流すため）。既に組んである分は数に含む。 */
+  generateRounds(count: number): Promise<void>;
   goToPreviousRound(): void;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
+  /** 今いるラウンドで締める。先に組んだだけでやらなかったラウンドは捨て、
+   *  出場・休み回数とペア履歴を残ったラウンドから組み直す。 */
+  endSessionAtCurrentRound(): Promise<void>;
   /** Delete the ongoing session without keeping it in history and without
    *  flushing pair-history weights. For sessions that were started but never
    *  actually played (no winner recorded) — keeping those as 'past' rows
@@ -248,6 +253,18 @@ export function createSessionStore(deps: {
       return;
     }
 
+    generateOneRound(s);
+    session.value = { ...s };
+    await sessionRepo.upsert(toSessionRow(session.value));
+  }
+
+  /** 1ラウンド組んで s に積む（永続化はしない）。
+   *
+   *  夜のぶんをまとめて先に組めるよう、生成だけを切り出してある。
+   *  ここで play/rest/singles とペア履歴も進むので、**組んだラウンドは
+   *  やった扱いになる**。実際にやらなかったぶんは
+   *  endSessionAtCurrentRound で捨てて統計を組み直す。 */
+  function generateOneRound(s: InMemorySession): void {
     const refs = s.attendees.map(a => a.ref);
     const n = refs.length;
 
@@ -323,10 +340,25 @@ export function createSessionStore(deps: {
     // `rounds`/`todayStats` are the same references as before the mutations above.
     // Adequate for v1 (Preact subscribers re-read on render). Time-travel / undo
     // would need a deep clone here.
-    session.value = { ...s };
+  }
 
-    // 9. Persist session
-    await sessionRepo.upsert(toSessionRow(session.value));
+  // ------------------------------------------------------------------
+  // generateRounds — 夜のぶんをまとめて組む（LINEに1通で流すため）
+  // ------------------------------------------------------------------
+  async function generateRounds(count: number): Promise<void> {
+    if (generating.value) return;
+    generating.value = true;
+    try {
+      const s = session.value;
+      if (!s) throw new Error("No active session. Call startNewSession first.");
+      while (s.rounds.length < count) generateOneRound(s);
+      // 表示は1ラウンド目に戻す。先に全部組んでも進行は1本ずつ。
+      s.currentRoundIndex = 0;
+      session.value = { ...s };
+      await sessionRepo.upsert(toSessionRow(session.value));
+    } finally {
+      generating.value = false;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -430,6 +462,68 @@ export function createSessionStore(deps: {
   }
 
   // ------------------------------------------------------------------
+  // endSessionAtCurrentRound — 今いるラウンドで夜を締める
+  // ------------------------------------------------------------------
+  //
+  // 全ラウンドを先に組む運用（LINE 1通化）だと、6本組んで5本で終わる夜が出る。
+  // ラウンドは**組んだ時点で** play/rest/singles とペア履歴に載るので、
+  // そのまま終了すると「やっていない6本目」が休み回数・成績・
+  // 次回以降のペア重みに混ざる。捨ててから組み直す。
+  async function endSessionAtCurrentRound(): Promise<void> {
+    const s = session.value;
+    if (!s) return; // silent no-op, mirroring endSession
+
+    const keep = s.currentRoundIndex + 1;
+    if (keep > 0 && keep < s.rounds.length) {
+      s.rounds = s.rounds.slice(0, keep);
+      await rebuildFromRounds(s);
+      s.currentRoundIndex = s.rounds.length - 1;
+      session.value = { ...s };
+    }
+    await endSession();
+  }
+
+  /** 残っているラウンドだけから todayStats・sameSession・ペア履歴を組み直す。
+   *
+   *  履歴はセッション中ずっと closure に積まれるだけで巻き戻せないので、
+   *  リポジトリから読み直して残ったラウンドを再生する（resume と同じ手）。 */
+  async function rebuildFromRounds(s: InMemorySession): Promise<void> {
+    for (const a of s.attendees) {
+      s.todayStats.set(refKey(a.ref), { play: 0, rest: 0, singles: 0 });
+    }
+    sameSession = { partner: new Map(), opp: new Map() };
+    history = await historyRepo.loadPairHistory();
+    decayHistory(history);
+
+    for (const r of s.rounds) {
+      for (const c of r.courts) {
+        for (const ref of [...c.teamA, ...c.teamB]) {
+          const key = refKey(ref);
+          const st = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
+          s.todayStats.set(key, {
+            ...st,
+            play: st.play + 1,
+            singles: st.singles + (c.type === "singles" ? 1 : 0),
+          });
+        }
+      }
+      for (const ref of r.resters) {
+        const key = refKey(ref);
+        const st = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
+        s.todayStats.set(key, { ...st, rest: st.rest + 1 });
+      }
+      applyRoundToHistory(history, r.courts);
+      applyRoundToSameSession(sameSession, r.courts);
+    }
+
+    const last = s.rounds.at(-1);
+    s.prevResters = last ? last.resters : [];
+    s.prevSingles = last
+      ? last.courts.filter((c) => c.type === "singles").flatMap((c) => [...c.teamA, ...c.teamB])
+      : [];
+  }
+
+  // ------------------------------------------------------------------
   // discardSession
   // ------------------------------------------------------------------
   async function discardSession(): Promise<void> {
@@ -515,7 +609,7 @@ export function createSessionStore(deps: {
     session.value = s;
   }
 
-  return { session, generating, startNewSession, nextRound, goToPreviousRound, recordWinner, endSession, discardSession, resume };
+  return { session, generating, startNewSession, nextRound, generateRounds, goToPreviousRound, recordWinner, endSession, endSessionAtCurrentRound, discardSession, resume };
 }
 
 /** True when at least one court in any round has a recorded winner. Used by

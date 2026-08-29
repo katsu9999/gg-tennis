@@ -9,6 +9,8 @@ import {
   formatSummaryMessage,
   parseReleasePayload,
   formatReleaseMessage,
+  parseRoundsPayload,
+  formatRoundsMessage,
 } from "../../supabase/functions/line-notify/format";
 
 const valid = (): LineRoundPayload => ({
@@ -292,5 +294,61 @@ describe("multi-court booking", () => {
     const bad = multi();
     (bad.slots[0] as Record<string, unknown>).court = 5;
     expect(parseBookingPayload(bad)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// All-rounds message (GG Shuffle posts the whole night in one go)
+// ---------------------------------------------------------------------------
+//
+// 1ラウンド1通だと 2時間6ラウンドで 6メッセージ＝グループ(約19人)114通。
+// 夜のぶんを先に組んで1通で流す。早く終わった夜は残りを使わないだけ。
+describe("all-rounds payload", () => {
+  const round = (n: number) => ({
+    roundNo: n,
+    courts: [{ number: 1, type: "doubles", teamA: ["①田中", "②佐藤"], teamB: ["③山本", "④鈴木"] }],
+    resters: ["⑤高田"],
+  });
+  const rounds = () => ({ kind: "rounds", rounds: [round(1), round(2), round(3)] });
+
+  it("parses every round", () => {
+    const p = parseRoundsPayload(rounds())!;
+    expect(p).not.toBeNull();
+    expect(p.rounds.map((r) => r.roundNo)).toEqual([1, 2, 3]);
+  });
+
+  it("renders one block per round in a single message", () => {
+    const text = formatRoundsMessage(parseRoundsPayload(rounds())!);
+    expect(text).toContain("全3ラウンド");
+    expect(text).toContain("R1");
+    expect(text).toContain("R3");
+    expect(text.indexOf("R1")).toBeLessThan(text.indexOf("R2"));
+    expect(text).toContain("①田中・②佐藤 vs ③山本・④鈴木");
+    expect(text).toContain("💤 休憩：⑤高田");
+  });
+
+  it("stays inside LINE's 5000-character limit for a long night", () => {
+    const many = { kind: "rounds", rounds: Array.from({ length: 8 }, (_, i) => round(i + 1)) };
+    const text = formatRoundsMessage(parseRoundsPayload(many)!);
+    expect(text.length).toBeLessThan(5000);
+  });
+
+  it("rejects an empty or oversized round list", () => {
+    expect(parseRoundsPayload({ kind: "rounds", rounds: [] })).toBeNull();
+    expect(parseRoundsPayload({
+      kind: "rounds",
+      rounds: Array.from({ length: 13 }, (_, i) => round(i + 1)),
+    })).toBeNull();
+  });
+
+  it("rejects when any round is malformed", () => {
+    expect(parseRoundsPayload({
+      kind: "rounds", rounds: [round(1), { roundNo: 2, courts: [], resters: [] }],
+    })).toBeNull();
+  });
+
+  it("is not confused with a single-round payload", () => {
+    expect(parseRoundsPayload(round(1))).toBeNull();
+    expect(parsePayload(rounds())).toBeNull();
   });
 });

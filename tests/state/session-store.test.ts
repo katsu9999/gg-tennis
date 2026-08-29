@@ -28,7 +28,10 @@ function makeDeps() {
       deleteOngoing: vi.fn().mockResolvedValue(undefined),
     } satisfies SessionRepository,
     historyRepo: {
-      loadPairHistory: vi.fn().mockResolvedValue(emptyHist()),
+      // 呼ぶたびに新しいオブジェクトを返す。DB から読み直す本物と同じ挙動で、
+      // 使い回すとセッション中に積んだ重みが「読み直し」でも消えず、
+      // 履歴の組み直し（endSessionAtCurrentRound）を検証できない。
+      loadPairHistory: vi.fn().mockImplementation(async () => emptyHist()),
       upsertPairWeights: vi.fn().mockResolvedValue(undefined),
       decayAll: vi.fn().mockResolvedValue(undefined),
     } satisfies HistoryRepository,
@@ -665,5 +668,95 @@ describe("shuffle config + gender (v1.6)", () => {
     const store = createSessionStore(deps);
     await store.resume();
     expect(store.session.value!.shuffleConfig).toEqual(DEFAULT_SHUFFLE_CONFIG);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pre-generating the whole night (2026-08-28)
+// ---------------------------------------------------------------------------
+//
+// LINE の無料枠はメッセージ数×人数で減る。1ラウンド1通で送ると 2時間6ラウンドで
+// 114通（19人）。全ラウンドを先に組んで1通で流すため、まとめて生成できるようにする。
+// ラウンドを組んだ時点で play/rest/singles とペア履歴が加算されるので、
+// 実際に5ラウンドで終わった夜は「やっていない6本目」を捨てて統計を組み直す必要がある。
+describe("session store — 全ラウンド先出し", () => {
+  it("generateRounds(6) で6ラウンド作り、表示は1ラウンド目に戻す", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+
+    await store.generateRounds(6);
+
+    expect(store.session.value!.rounds).toHaveLength(6);
+    expect(store.session.value!.currentRoundIndex).toBe(0);
+  });
+
+  it("先に作ってあっても7ラウンド目は手で作れる", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+
+    // 6本目まで進んでから、もう1本
+    for (let i = 0; i < 5; i++) await store.nextRound();
+    expect(store.session.value!.currentRoundIndex).toBe(5);
+    await store.nextRound();
+
+    expect(store.session.value!.rounds).toHaveLength(7);
+    expect(store.session.value!.currentRoundIndex).toBe(6);
+  });
+
+  it("5ラウンド目で終了すると6本目は捨てられる", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    for (let i = 0; i < 4; i++) await store.nextRound();   // 5ラウンド目
+
+    await store.endSessionAtCurrentRound();
+
+    const row = deps.upsertedRows.at(-1)!;
+    expect((row.rounds as unknown[])).toHaveLength(5);
+  });
+
+  it("捨てたラウンド分の出場・休みカウントが残らない", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    for (let i = 0; i < 4; i++) await store.nextRound();
+
+    await store.endSessionAtCurrentRound();
+
+    const row = deps.upsertedRows.at(-1)!;
+    const stats = row.today_stats as Record<string, { play: number; rest: number }>;
+    for (const [key, v] of Object.entries(stats)) {
+      expect(v.play + v.rest, `${key} が5ラウンド分になっていない`).toBe(5);
+    }
+  });
+
+  it("最終ラウンドで終了すれば全部残る", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    for (let i = 0; i < 5; i++) await store.nextRound();
+
+    await store.endSessionAtCurrentRound();
+
+    expect((deps.upsertedRows.at(-1)!.rounds as unknown[])).toHaveLength(6);
+  });
+
+  it("捨てたラウンドのペア履歴は保存されない", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    // 1ラウンド目で終了 → 2コート×2ペア＝4組だけが履歴に載る
+    await store.endSessionAtCurrentRound();
+
+    const updates = deps.historyRepo.upsertPairWeights.mock.calls.at(-1)![0] as
+      { partnerW: number }[];
+    expect(updates.filter((u) => u.partnerW > 0)).toHaveLength(4);
   });
 });

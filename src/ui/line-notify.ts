@@ -1,7 +1,7 @@
 import type { AttendeeRef } from "@/engine/models";
 import type { InMemorySession } from "@/state/session-store";
-import type { LineRoundPayload, LineSummaryPayload } from "@/data/line-notify-client";
-import { sendLineNotify, sendLineSummary } from "@/data/line-notify-client";
+import type { LineRoundPayload, LineRoundsPayload, LineSummaryPayload } from "@/data/line-notify-client";
+import { sendLineNotify, sendLineRounds, sendLineSummary } from "@/data/line-notify-client";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
@@ -24,7 +24,29 @@ export function buildRoundPayload(
   s: InMemorySession,
   memberNames: Map<number, string>,
 ): LineRoundPayload | null {
-  const round = s.rounds[s.currentRoundIndex];
+  return buildPayloadForIndex(s, memberNames, s.currentRoundIndex);
+}
+
+/** 夜のぶんを1通で流すためのペイロード。生成済みの全ラウンドを詰める。
+ *
+ *  1ラウンド1通だとグループ(約19人)で114通/回。LINE の無料枠は
+ *  メッセージ数×人数で減るので、まとめて19通にする。 */
+export function buildAllRoundsPayload(
+  s: InMemorySession,
+  memberNames: Map<number, string>,
+): LineRoundsPayload | null {
+  const rounds = s.rounds
+    .map((_, i) => buildPayloadForIndex(s, memberNames, i))
+    .filter((r): r is LineRoundPayload => r !== null);
+  return rounds.length > 0 ? { kind: "rounds", rounds } : null;
+}
+
+function buildPayloadForIndex(
+  s: InMemorySession,
+  memberNames: Map<number, string>,
+  index: number,
+): LineRoundPayload | null {
+  const round = s.rounds[index];
   if (!round) return null;
 
   const guestNames = new Map<string, string>();
@@ -45,7 +67,7 @@ export function buildRoundPayload(
   };
 
   return {
-    roundNo: s.currentRoundIndex + 1,
+    roundNo: index + 1,
     courts: round.courts.map((c) => ({
       number: c.number,
       type: c.type,
@@ -152,6 +174,32 @@ export async function offerLineNotify(): Promise<void> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("line notify failed", e);
+    void appDialog.alert(t.round.lineSendFailed(msg));
+  }
+}
+
+
+/**
+ * 夜のぶんをまとめて組んだ直後: 全ラウンドを1通で流すか聞いて、OKなら送る。
+ *
+ * 1ラウンド1通だとグループ(約19人)で114通/回。LINE の無料枠は
+ * メッセージ数×人数で減るので、まとめて19通にする。
+ * 送信に失敗してもラウンドの進行には触らない（alert のみ）。
+ */
+export async function offerAllRoundsNotify(): Promise<void> {
+  if (IS_LOCAL) return;
+  const s = sessionStore.session.value;
+  if (!s) return;
+  const memberNames = new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const));
+  const payload = buildAllRoundsPayload(s, memberNames);
+  if (!payload) return;
+
+  if (!(await appDialog.confirm(t.round.lineAllRoundsConfirm(payload.rounds.length)))) return;
+  try {
+    await sendLineRounds(payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("line rounds notify failed", e);
     void appDialog.alert(t.round.lineSendFailed(msg));
   }
 }

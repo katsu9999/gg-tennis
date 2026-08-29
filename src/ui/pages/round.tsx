@@ -4,13 +4,32 @@ import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { sessionHasResults } from "@/state/session-store";
-import { offerLineNotify, offerSessionSummary, buildSummaryPayload } from "@/ui/line-notify";
+import { offerAllRoundsNotify, offerLineNotify, offerSessionSummary, buildSummaryPayload } from "@/ui/line-notify";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { BRAND, IS_LOCAL } from "@/flavor";
 
 const showNames = signal(false);
+
+// GG の2時間ナイターの典型。先に全部組んで LINE に1通で流す。
+// 早く終わった夜は「セッション終了」を押したラウンドまでが残る（残りは捨てる）。
+// 7ラウンド目までいく夜は「次」で1本足せる。
+const ROUNDS_PER_NIGHT = 6;
+
+function generateWholeNight(): void {
+  void (async () => {
+    if (!(await appDialog.confirm(t.round.generateAllConfirm(ROUNDS_PER_NIGHT)))) return;
+    try {
+      await sessionStore.generateRounds(ROUNDS_PER_NIGHT);
+      await offerAllRoundsNotify();
+    } catch (e) {
+      console.error("generateRounds failed", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      void appDialog.alert(t.round.saveFailed(msg));
+    }
+  })();
+}
 
 function generateNextRound(): void {
   // Only offer the LINE push when a NEW round was generated — stepping
@@ -202,6 +221,29 @@ export function RoundPage() {
           コート上では「まだ送らないで」→「やっぱり送る」が普通に起きるので、
           いつでも送り直せる口を残す。前のラウンドに戻ってから押せば送り忘れも拾える。
           何度押しても素直に送る（送信済みを覚えると、本当に届いていない時に詰む）。 */}
+      {(sessionStore.session.value?.rounds.length ?? 0) === 0 && (
+        <button
+          type="button"
+          data-testid="generate-all-btn"
+          onClick={generateWholeNight}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "1.5px solid var(--line)",
+            borderRadius: 8,
+            color: "var(--muted)",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          🎾 {t.round.generateAll(ROUNDS_PER_NIGHT)}
+        </button>
+      )}
+
       {!IS_LOCAL && (
         <button
           type="button"
@@ -251,14 +293,19 @@ export function RoundPage() {
           }
           // 成績は endSession() がセッションを畳む前にしか作れないので、
           // 先に組み立てておく。送信は終了処理が通ったあと。
-          const summary = s
+          // 先に組んだだけでやらなかったラウンドは終了時に捨てられるので、
+          // 成績もその範囲（今いるラウンドまで）で作る。
+          const played = s
+            ? { ...s, rounds: s.rounds.slice(0, s.currentRoundIndex + 1) }
+            : null;
+          const summary = played
             ? buildSummaryPayload(
-                s,
+                played,
                 new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const)),
               )
             : null;
           try {
-            await sessionStore.endSession();
+            await sessionStore.endSessionAtCurrentRound();
             await offerSessionSummary(summary);
             navigate("/");
           } catch (e) {
