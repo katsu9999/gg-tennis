@@ -200,6 +200,16 @@ describe("buildAllRoundsPayload", () => {
     expect(p.rounds.map((r) => r.roundNo)).toEqual([1, 2]);
   });
 
+  it("fromIndex から先だけ詰める（メンバー増減で組み直したぶんの再送）", () => {
+    const r2: Round = { ...round, index: 1 };
+    const r3: Round = { ...round, index: 2 };
+    const s = makeSession([round, r2, r3], 0);
+    const names = new Map([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "高田"]]);
+    const p = buildAllRoundsPayload(s, names, 1)!;
+    expect(p.rounds.map((r) => r.roundNo)).toEqual([2, 3]);
+    expect(buildAllRoundsPayload(s, names, 3)).toBeNull();
+  });
+
   it("labels players the same way as the single-round message", () => {
     const s = makeSession([round], 0);
     const names = new Map([[1, "田中"], [2, "佐藤"], [3, "山本"], [5, "高田"]]);

@@ -57,6 +57,9 @@ export const ja = {
       `${n}ラウンド分の組み合わせをまとめて作り、LINEに1通で送ります。\n早く終わった場合は「セッション終了」を押したラウンドまでが記録されます。`,
     lineAllRoundsConfirm: (n: number) =>
       `全${n}ラウンドの組み合わせをLINEグループに1通で送りますか？`,
+    lineRemainingRoundsConfirm: (n: number, fromRoundNo: number) =>
+      `組み直したR${fromRoundNo}以降の${n}ラウンドをLINEグループに1通で送りますか？`,
+    editAttendees: "👥 メンバーの追加・離脱",
     lineSummaryConfirm: "今日の成績をLINEグループに送りますか？",
     lineSendFailed: (msg: string) =>
       `LINEへの送信に失敗しました:\n${msg}\n（ラウンドはこのまま進められます）`,
@@ -118,6 +121,20 @@ export const ja = {
     strengthWeak: "弱",
     strengthMid: "中",
     strengthStrong: "強",
+  },
+  editAttendees: {
+    title: "メンバーの追加・離脱",
+    hint: (currentRoundNo: number) =>
+      `R${currentRoundNo} まではそのまま。R${currentRoundNo + 1} 以降を新しいメンバーで組み直します。`,
+    hintNoRegen: "組み直す先のラウンドはありません。次のラウンドから反映されます。",
+    joined: "追加",
+    selectedCount: (n: number) => `参加: ${n} 人`,
+    apply: "変更を反映",
+    applyConfirm: (fromRoundNo: number) =>
+      `R${fromRoundNo} 以降を組み直します。よろしいですか？\n（実施済みのラウンドと勝敗はそのまま残ります）`,
+    applyConfirmNoRegen: "メンバーを変更します。次のラウンドから反映されます。",
+    applyFailed: (msg: string) => `メンバーの変更に失敗しました:\n${msg}`,
+    back: "やめる",
   },
   roster: {
     title: "名簿",
@@ -227,6 +244,9 @@ export const en: Strings = {
       `Generate ${n} rounds at once and send them to LINE in a single message.\nIf the night ends early, only the rounds up to where you press "End session" are kept.`,
     lineAllRoundsConfirm: (n: number) =>
       `Send all ${n} rounds to the LINE group in one message?`,
+    lineRemainingRoundsConfirm: (n: number, fromRoundNo: number) =>
+      `Send the ${n} rebuilt rounds (R${fromRoundNo} onwards) to the LINE group in one message?`,
+    editAttendees: "👥 Players joining / leaving",
     lineSummaryConfirm: "Send today's standings to the LINE group?",
     lineSendFailed: (msg: string) =>
       `Failed to send to LINE:\n${msg}\n(You can keep playing — the round is unaffected.)`,
@@ -287,6 +307,20 @@ export const en: Strings = {
     strengthWeak: "Low",
     strengthMid: "Mid",
     strengthStrong: "High",
+  },
+  editAttendees: {
+    title: "Players joining / leaving",
+    hint: (currentRoundNo: number) =>
+      `R${currentRoundNo} stays as it is. R${currentRoundNo + 1} onwards will be rebuilt with the new line-up.`,
+    hintNoRegen: "No upcoming rounds to rebuild — the change applies from the next round.",
+    joined: "new",
+    selectedCount: (n: number) => `Playing: ${n}`,
+    apply: "Apply changes",
+    applyConfirm: (fromRoundNo: number) =>
+      `Rebuild R${fromRoundNo} onwards?\n(Rounds already played and their results are kept.)`,
+    applyConfirmNoRegen: "Update the line-up? It applies from the next round.",
+    applyFailed: (msg: string) => `Could not change the line-up:\n${msg}`,
+    back: "Cancel",
   },
   roster: {
     title: "Roster",

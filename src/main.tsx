@@ -23,6 +23,7 @@ import { HomePage } from "@/ui/pages/home";
 import { NewSessionPage } from "@/ui/pages/new-session";
 import { NumberMapPage } from "@/ui/pages/number-map";
 import { RoundPage } from "@/ui/pages/round";
+import { EditAttendeesPage } from "@/ui/pages/edit-attendees";
 import { HistoryPage } from "@/ui/pages/history";
 import { RosterPage } from "@/ui/pages/roster";
 import { PlannedSessionsPage } from "@/ui/pages/planned-sessions";
@@ -62,6 +63,7 @@ function CurrentPage() {
     case "new-session": return <NewSessionPage />;
     case "number-map": return <NumberMapPage />;
     case "round": return <RoundPage />;
+    case "edit-attendees": return <EditAttendeesPage />;
     case "history": return <HistoryPage />;
     case "roster": return <RosterPage />;
     case "planned-sessions": return <PlannedSessionsPage />;

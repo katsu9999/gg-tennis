@@ -34,9 +34,10 @@ export function buildRoundPayload(
 export function buildAllRoundsPayload(
   s: InMemorySession,
   memberNames: Map<number, string>,
+  fromIndex = 0,
 ): LineRoundsPayload | null {
   const rounds = s.rounds
-    .map((_, i) => buildPayloadForIndex(s, memberNames, i))
+    .map((_, i) => (i < fromIndex ? null : buildPayloadForIndex(s, memberNames, i)))
     .filter((r): r is LineRoundPayload => r !== null);
   return rounds.length > 0 ? { kind: "rounds", rounds } : null;
 }
@@ -204,6 +205,30 @@ export async function offerAllRoundsNotify(): Promise<void> {
   }
 }
 
+
+/**
+ * 途中でメンバーが増減して未実施ラウンドを組み直した直後: 組み直したぶんだけを
+ * 1通で流すか聞いて、OKなら送る。実施済みのラウンドは既に送ってあるので出さない。
+ */
+export async function offerRemainingRoundsNotify(fromIndex: number): Promise<void> {
+  if (IS_LOCAL) return;
+  const s = sessionStore.session.value;
+  if (!s) return;
+  const memberNames = new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const));
+  const payload = buildAllRoundsPayload(s, memberNames, fromIndex);
+  if (!payload) return;
+
+  if (!(await appDialog.confirm(
+    t.round.lineRemainingRoundsConfirm(payload.rounds.length, fromIndex + 1),
+  ))) return;
+  try {
+    await sendLineRounds(payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("line remaining rounds notify failed", e);
+    void appDialog.alert(t.round.lineSendFailed(msg));
+  }
+}
 
 /**
  * At "End session": offer to push the day's standings to the LINE group.
