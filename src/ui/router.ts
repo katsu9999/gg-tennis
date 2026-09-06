@@ -18,6 +18,7 @@ export type Route =
   | { name: "new-session" }
   | { name: "number-map" }
   | { name: "round" }
+  | { name: "edit-attendees" }
   | { name: "history" }
   | { name: "past-sessions" }
   | { name: "ranking" }
@@ -53,6 +54,7 @@ function matchAnyFlavor(path: string): Route {
   if (path === "/session/new") return { name: "new-session" };
   if (path === "/session/number-map") return { name: "number-map" };
   if (path === "/session/round") return { name: "round" };
+  if (path === "/session/attendees") return { name: "edit-attendees" };
   if (path === "/session/history") return { name: "history" };
   if (path === "/sessions/past") return { name: "past-sessions" };
   if (path === "/ranking") return { name: "ranking" };

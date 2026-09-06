@@ -760,3 +760,168 @@ describe("session store — 全ラウンド先出し", () => {
     expect(updates.filter((u) => u.partnerW > 0)).toHaveLength(4);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 途中参加・途中離脱（changeAttendees）
+// ---------------------------------------------------------------------------
+
+const memberIdsIn = (round: { courts: { teamA: unknown[]; teamB: unknown[] }[]; resters: unknown[] }): number[] => {
+  const refs = [
+    ...round.courts.flatMap((c) => [...c.teamA, ...c.teamB]),
+    ...round.resters,
+  ] as { kind: string; memberId: number }[];
+  return refs.filter((r) => r.kind === "member").map((r) => r.memberId).sort((a, b) => a - b);
+};
+
+describe("session store — 途中参加・途中離脱", () => {
+  async function sixRoundsAtR2() {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    await store.nextRound(); // R2 を表示中（index 1）
+    return { deps, store };
+  }
+
+  it("追加した人は末尾の番号をもらい、既存の番号は変わらない", async () => {
+    const { store } = await sixRoundsAtR2();
+
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+
+    const s = store.session.value!;
+    expect(s.attendees).toHaveLength(9);
+    expect(s.attendees[8]!.ref).toEqual({ kind: "member", memberId: 9 });
+    expect(s.attendees[8]!.todayNumber).toBe(9);
+    for (let i = 0; i < 8; i++) expect(s.attendees[i]!.todayNumber).toBe(i + 1);
+  });
+
+  it("追加した人は未実施ラウンドにだけ出る（実施済みは変わらない）", async () => {
+    const { store } = await sixRoundsAtR2();
+    const before = store.session.value!.rounds.map(memberIdsIn);
+
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+
+    const s = store.session.value!;
+    expect(s.rounds).toHaveLength(6);
+    expect(s.currentRoundIndex).toBe(1);
+    // R1・R2 は手つかず
+    expect(memberIdsIn(s.rounds[0]!)).toEqual(before[0]);
+    expect(memberIdsIn(s.rounds[1]!)).toEqual(before[1]);
+    // R3 以降に 9番が入る
+    for (let i = 2; i < 6; i++) expect(memberIdsIn(s.rounds[i]!)).toContain(9);
+    expect(memberIdsIn(s.rounds[0]!)).not.toContain(9);
+  });
+
+  it("離脱した人は未実施ラウンドに出ない（実施済みの記録は残る）", async () => {
+    const { store } = await sixRoundsAtR2();
+
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7] });
+
+    const s = store.session.value!;
+    expect(s.attendees.find((a) => a.ref.kind === "member" && a.ref.memberId === 8)!.left).toBe(true);
+    for (let i = 2; i < 6; i++) expect(memberIdsIn(s.rounds[i]!)).not.toContain(8);
+    expect(memberIdsIn(s.rounds[0]!)).toContain(8);
+  });
+
+  it("途中から来た人の出場・休みは0から始まる", async () => {
+    const { store } = await sixRoundsAtR2();
+
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+
+    // R1・R2 の分だけ既存メンバーに載り、新メンバーは 0 のまま組み直しが始まる
+    const s = store.session.value!;
+    const nine = s.todayStats.get(JSON.stringify({ kind: "member", memberId: 9 }))!;
+    const one = s.todayStats.get(JSON.stringify({ kind: "member", memberId: 1 }))!;
+    expect(nine.play + nine.rest).toBe(4); // R3-R6 の4本だけ
+    expect(one.play + one.rest).toBe(6);
+  });
+
+  it("組み直す先が無ければラウンドは増えない（次のラウンドから反映）", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.nextRound(); // R1 だけ
+
+    const res = await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+
+    expect(res.regeneratedFrom).toBeNull();
+    expect(store.session.value!.rounds).toHaveLength(1);
+    await store.nextRound();
+    expect(memberIdsIn(store.session.value!.rounds[1]!)).toContain(9);
+  });
+
+  it("残り2人未満になる離脱は拒否し、何も変えない", async () => {
+    const { store } = await sixRoundsAtR2();
+
+    await expect(store.changeAttendees({ memberIds: [1] })).rejects.toThrow();
+    expect(store.session.value!.attendees.every((a) => !a.left)).toBe(true);
+    expect(store.session.value!.rounds).toHaveLength(6);
+  });
+
+  it("戻ってきた人は再び組まれる", async () => {
+    const { store } = await sixRoundsAtR2();
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7] });
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8] });
+
+    const s = store.session.value!;
+    expect(s.attendees.find((a) => a.ref.kind === "member" && a.ref.memberId === 8)!.left).toBe(false);
+    expect(memberIdsIn(s.rounds[5]!)).toContain(8);
+  });
+
+  it("変更後の状態を保存する", async () => {
+    const { deps, store } = await sixRoundsAtR2();
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+
+    const row = deps.upsertedRows.at(-1)!;
+    expect((row.attendees as unknown[])).toHaveLength(9);
+    expect(row.current_round_index).toBe(1);
+  });
+});
+
+describe("changeAttendees — 通信が落ちたとき", () => {
+  it("ペア履歴の読み直しに失敗しても、セッションを壊さない", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    await store.nextRound(); // R2 表示中
+
+    deps.historyRepo.loadPairHistory.mockRejectedValueOnce(new Error("offline"));
+    await expect(store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] }))
+      .rejects.toThrow("offline");
+
+    // ラウンドも参加者も手つかず。resume() は session が非nullだとDBを読み直さないので、
+    // ここが半端に壊れると復旧手段が無くなる。
+    const s = store.session.value!;
+    expect(s.rounds).toHaveLength(6);
+    expect(s.attendees).toHaveLength(8);
+    expect(s.currentRoundIndex).toBe(1);
+  });
+
+  it("保存に失敗しても以後の操作をブロックしない", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    await store.nextRound();
+
+    deps.sessionRepo.upsert.mockRejectedValueOnce(new Error("offline"));
+    await expect(store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] }))
+      .rejects.toThrow("offline");
+
+    expect(store.generating.value).toBe(false);
+    await store.nextRound();
+    expect(store.session.value!.currentRoundIndex).toBe(2);
+  });
+
+  it("memberIds に同じ人が2回入っていても増やさない", async () => {
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.nextRound();
+
+    await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 9] });
+
+    expect(store.session.value!.attendees).toHaveLength(9);
+  });
+});

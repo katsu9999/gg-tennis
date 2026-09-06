@@ -266,6 +266,29 @@ export function RoundPage() {
         </button>
       )}
 
+      {/* 途中から来る人・先に帰る人。今のラウンドはそのままで、
+          先に組んだだけの未実施ラウンドを新しい構成で組み直す。 */}
+      <button
+        type="button"
+        data-testid="edit-attendees-btn"
+        onClick={() => navigate("/session/attendees")}
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: 8,
+          padding: "8px 12px",
+          background: "transparent",
+          border: "1.5px solid var(--line)",
+          borderRadius: 8,
+          color: "var(--muted)",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        {t.round.editAttendees}
+      </button>
+
       <button
         type="button"
         data-testid="end-session-btn"

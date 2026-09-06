@@ -10,6 +10,7 @@ describe("matchRoute", () => {
     ["/session/new", { name: "new-session" }],
     ["/session/number-map", { name: "number-map" }],
     ["/session/round", { name: "round" }],
+    ["/session/attendees", { name: "edit-attendees" }],
     ["/session/history", { name: "history" }],
     ["/sessions/past", { name: "past-sessions" }],
     ["/ranking", { name: "ranking" }],

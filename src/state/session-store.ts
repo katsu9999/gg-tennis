@@ -32,7 +32,9 @@ export interface InMemorySession {
   location: string;
   courtCount: number;
   allowSingles: boolean;
-  attendees: { ref: AttendeeRef; todayNumber: number; isGuest: boolean; guestName?: string; gender?: Gender }[];
+  /** `left: true` は途中で帰った人。番号・実施済みラウンドの記録はそのまま残し、
+   *  以降のラウンド生成からだけ外す（成績サマリーには載る）。 */
+  attendees: { ref: AttendeeRef; todayNumber: number; isGuest: boolean; guestName?: string; gender?: Gender; left?: boolean }[];
   rounds: Round[];
   currentRoundIndex: number;
   /** Per-attendee play/rest/singles counts keyed by JSON.stringify(ref). */
@@ -70,6 +72,21 @@ export interface StartNewSessionInput {
   memberGenders?: ReadonlyMap<number, Gender>;
 }
 
+export interface ChangeAttendeesInput {
+  /** 変更後の参加メンバー全員（今いる人 ＋ 途中から来た人。帰った人は含めない）。 */
+  memberIds: number[];
+  /** memberId → gender。追加メンバーの性別スナップショット用。 */
+  memberGenders?: ReadonlyMap<number, Gender>;
+}
+
+export interface ChangeAttendeesResult {
+  added: number;
+  left: number;
+  /** 組み直した未実施ラウンドの先頭 index。組み直しが無ければ null。 */
+  regeneratedFrom: number | null;
+  totalRounds: number;
+}
+
 export interface SessionStore {
   session: Signal<InMemorySession | null>;
   /** True while nextRound() is in flight — used to disable buttons so a
@@ -79,6 +96,9 @@ export interface SessionStore {
   nextRound(): Promise<void>;
   /** 夜のぶんをまとめて組む（LINEに1通で流すため）。既に組んである分は数に含む。 */
   generateRounds(count: number): Promise<void>;
+  /** 途中参加・途中離脱。今表示中のラウンドまではそのまま残し、先に組んだだけの
+   *  未実施ラウンドを新しいメンバー構成で組み直す。 */
+  changeAttendees(input: ChangeAttendeesInput): Promise<ChangeAttendeesResult>;
   goToPreviousRound(): void;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
@@ -265,7 +285,9 @@ export function createSessionStore(deps: {
    *  やった扱いになる**。実際にやらなかったぶんは
    *  endSessionAtCurrentRound で捨てて統計を組み直す。 */
   function generateOneRound(s: InMemorySession): void {
-    const refs = s.attendees.map(a => a.ref);
+    // 途中で帰った人（left）はコートにも休憩にも入れない。番号と実施済みの
+    // 記録は attendees に残したまま、これ以降の組み合わせからだけ外す。
+    const refs = s.attendees.filter(a => !a.left).map(a => a.ref);
     const n = refs.length;
 
     // 1. Plan round
@@ -356,6 +378,84 @@ export function createSessionStore(deps: {
       s.currentRoundIndex = 0;
       session.value = { ...s };
       await sessionRepo.upsert(toSessionRow(session.value));
+    } finally {
+      generating.value = false;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // changeAttendees — 途中参加・途中離脱
+  // ------------------------------------------------------------------
+  //
+  // 夜のぶんを先に6本組む運用なので、遅れて来た人・先に帰る人が出ると
+  // 「もう組んであるラウンド」が実態とズレる。今表示中のラウンドまでは
+  // 手をつけず、その先の未実施ラウンドだけを新しい構成で組み直す。
+  //
+  // 途中から来た人の play/rest は 0 から始まる（Katsu 決定 2026-09-05）。
+  // rester-selector はプレー数が多い順に休ませるので、来たばかりの人が
+  // 数ラウンド続けて出て、待っていた人が休みに入る。
+  async function changeAttendees(input: ChangeAttendeesInput): Promise<ChangeAttendeesResult> {
+    if (generating.value) throw new Error("ラウンドを生成中です。少し待ってからやり直してください。");
+    const s = session.value;
+    if (!s) throw new Error("No active session.");
+
+    // 先に検証してから壊す。ゲストは名簿に載らないので常に在席扱い。
+    const wanted = new Set(input.memberIds);
+    const guestCount = s.attendees.filter(a => a.ref.kind !== "member").length;
+    if (wanted.size + guestCount < 2) {
+      throw new Error("参加者が2人未満になります。1人以上残してください。");
+    }
+
+    generating.value = true;
+    try {
+      // 通信は先に済ませる。ここから下は同期で、途中で失敗しない。
+      const total = s.rounds.length;
+      const keep = Math.max(s.currentRoundIndex + 1, 0);
+      const needsRebuild = total > keep;
+      let freshHistory: PairHistory | null = null;
+      if (needsRebuild) {
+        freshHistory = await historyRepo.loadPairHistory();
+        decayHistory(freshHistory);
+      }
+
+      let added = 0;
+      let left = 0;
+
+      const known = new Set<number>();
+      for (const a of s.attendees) {
+        if (a.ref.kind !== "member") continue;
+        known.add(a.ref.memberId);
+        const stays = wanted.has(a.ref.memberId);
+        if (stays && a.left) a.left = false;          // 帰ったつもりが戻ってきた
+        else if (!stays && !a.left) { a.left = true; left += 1; }
+      }
+
+      for (const id of input.memberIds) {
+        if (known.has(id)) continue;
+        known.add(id);                                 // 同じ id が2回来ても増やさない
+        const ref: AttendeeRef = { kind: "member", memberId: id };
+        s.attendees.push({
+          ref,
+          todayNumber: s.attendees.length + 1,
+          isGuest: false,
+          gender: input.memberGenders?.get(id) ?? "unknown",
+        });
+        s.todayStats.set(refKey(ref), { play: 0, rest: 0, singles: 0 });
+        added += 1;
+      }
+
+      let regeneratedFrom: number | null = null;
+      if (needsRebuild && freshHistory) {
+        s.rounds = s.rounds.slice(0, keep);
+        rebuildFromRoundsWith(s, freshHistory);
+        while (s.rounds.length < total) generateOneRound(s);
+        s.currentRoundIndex = keep - 1;
+        regeneratedFrom = keep;
+      }
+
+      session.value = { ...s };
+      await sessionRepo.upsert(toSessionRow(session.value));
+      return { added, left, regeneratedFrom, totalRounds: s.rounds.length };
     } finally {
       generating.value = false;
     }
@@ -488,12 +588,23 @@ export function createSessionStore(deps: {
    *  履歴はセッション中ずっと closure に積まれるだけで巻き戻せないので、
    *  リポジトリから読み直して残ったラウンドを再生する（resume と同じ手）。 */
   async function rebuildFromRounds(s: InMemorySession): Promise<void> {
+    const fresh = await historyRepo.loadPairHistory();
+    decayHistory(fresh);
+    rebuildFromRoundsWith(s, fresh);
+  }
+
+  /** rebuildFromRounds の同期版。読み直し済みのペア履歴を渡す。
+   *
+   *  ネットワーク待ちを外に出すためだけの分割。セッションを書き換えている
+   *  途中で await すると、通信が落ちたときに「ラウンドは削ったが保存も
+   *  やり直しもできない」中途半端な状態が残る（resume() は session が
+   *  非 null だと DB を読み直さないので、その状態が固定される）。 */
+  function rebuildFromRoundsWith(s: InMemorySession, freshHistory: PairHistory): void {
     for (const a of s.attendees) {
       s.todayStats.set(refKey(a.ref), { play: 0, rest: 0, singles: 0 });
     }
     sameSession = { partner: new Map(), opp: new Map() };
-    history = await historyRepo.loadPairHistory();
-    decayHistory(history);
+    history = freshHistory;
 
     for (const r of s.rounds) {
       for (const c of r.courts) {
@@ -609,7 +720,7 @@ export function createSessionStore(deps: {
     session.value = s;
   }
 
-  return { session, generating, startNewSession, nextRound, generateRounds, goToPreviousRound, recordWinner, endSession, endSessionAtCurrentRound, discardSession, resume };
+  return { session, generating, startNewSession, nextRound, generateRounds, changeAttendees, goToPreviousRound, recordWinner, endSession, endSessionAtCurrentRound, discardSession, resume };
 }
 
 /** True when at least one court in any round has a recorded winner. Used by
