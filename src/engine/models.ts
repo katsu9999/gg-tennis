@@ -67,10 +67,23 @@ export interface PairHistory {
 export interface SameSessionStats {
   partner: Map<string, number>;
   opp: Map<string, number>;
+  /** Counts per set of four sharing a doubles court (2026-09-12). Partner and
+   *  opponent counts alone cannot see "the same foursome met again with the
+   *  teams swapped", which is what it looks like from the court. Optional so
+   *  that sessions restored from older rows keep working. */
+  quad?: Map<string, number>;
 }
 
 export function pairKey(a: MemberId, b: MemberId): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+/** Canonical key for the four players sharing a doubles court, independent of
+ *  how they are split into teams. Null when the court is not a full four
+ *  members (guests are dropped by memberIdsFrom). */
+export function quadKey(ids: readonly MemberId[]): string | null {
+  if (ids.length !== 4) return null;
+  return [...ids].sort((a, b) => a - b).join(":");
 }
 
 /** Extract member ids (canonical sentinel) from a list of attendees; guests are silently dropped. */

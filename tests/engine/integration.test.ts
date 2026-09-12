@@ -5,6 +5,7 @@ import { buildRound } from "@/engine/round-builder";
 import { applyRoundToHistory, applyRoundToSameSession } from "@/engine/stats";
 import { mulberry32 } from "@/engine/rng";
 import type { AttendeeRef, PairHistory } from "@/engine/models";
+import { memberIdsFrom, pairKey } from "@/engine/models";
 
 const ref = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
 
@@ -55,11 +56,12 @@ describe("engine integration (full session simulation)", () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
-  it("GG night (12 ppl, 3 doubles, 5 rounds) keeps partner repeats to a minimum", () => {
-    // Exact theoretical minimum: each player partners 5 different people across
-    // 5 rounds out of 11 possible, so 0 repeats is achievable. Real-world: a
-    // greedy search may settle for a couple of repeats. We assert it stays
-    // single-digit so a regression in the weights or attempt count is loud.
+  it("GG night (12 ppl, 3 doubles, 5 rounds) never repeats a partnership", () => {
+    // Each player partners 5 different people across 5 rounds out of 11
+    // possible, so 0 repeats is always achievable and anything above 0 is a
+    // bug. This used to assert `< 5` AND compare JSON.stringify keys against
+    // pairKey entries, so it counted nothing and passed vacuously — which is
+    // how the 2026-08-02 weight change shipped a round-5 repeat unnoticed.
     const attendees = Array.from({ length: 12 }, (_, i) => ref(i + 1));
     const courts = 3;
     const rng = mulberry32(7);
@@ -81,10 +83,10 @@ describe("engine integration (full session simulation)", () => {
       for (const c of built.courts) {
         const teams = [c.teamA, c.teamB] as const;
         for (const team of teams) {
-          const a = k(team[0]!);
-          const b = k(team[1]!);
-          const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-          if (ss.partner.has(key)) partnerRepeatCount += 1;
+          const ids = memberIdsFrom(team);
+          for (let i = 0; i < ids.length; i++)
+            for (let j = i + 1; j < ids.length; j++)
+              if ((ss.partner.get(pairKey(ids[i]!, ids[j]!)) ?? 0) > 0) partnerRepeatCount += 1;
         }
         for (const r of [...c.teamA, ...c.teamB]) {
           playCount.set(k(r), (playCount.get(k(r)) ?? 0) + 1);
@@ -95,9 +97,9 @@ describe("engine integration (full session simulation)", () => {
       prevResters = resters;
     }
 
-    // 5 rounds × 3 courts × 2 teams = 30 pair-events total. With perfect
-    // scheduling all 30 are unique. We expect the greedy search to stay close.
-    expect(partnerRepeatCount).toBeLessThan(5);
+    // 5 rounds × 3 courts × 2 teams = 30 pair-events total, all of which can
+    // be unique at this headcount.
+    expect(partnerRepeatCount).toBe(0);
   });
 
   it("computeRankings returns empty maps when no matches fall in the window", async () => {

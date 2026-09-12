@@ -1,5 +1,5 @@
 import type { AttendeeRef, Court, Gender, PairHistory, SameSessionStats } from "./models";
-import { memberIdsFrom, pairKey } from "./models";
+import { memberIdsFrom, pairKey, quadKey } from "./models";
 import type { Rng } from "./rng";
 import { shuffle } from "./rng";
 import {
@@ -64,26 +64,36 @@ function multOf(config: ShuffleConfig | undefined): Mult {
  *  Singles courts are deliberately included: a 男 vs 女 singles match is the
  *  most direct form of the power imbalance this rule exists to avoid, so it
  *  carries the gap-1 penalty and same-gender singles are preferred. */
+function genderGapOf(
+  a: readonly AttendeeRef[],
+  b: readonly AttendeeRef[],
+  opts: BuildOptions,
+): number | null {
+  const config = opts.config ?? DEFAULT_SHUFFLE_CONFIG;
+  if (!config.genderBalance || !opts.genderOf) return null;
+  let malesA = 0;
+  let malesB = 0;
+  for (const r of a) {
+    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
+    if (g === "unknown") return null;
+    if (g === "male") malesA++;
+  }
+  for (const r of b) {
+    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
+    if (g === "unknown") return null;
+    if (g === "male") malesB++;
+  }
+  return Math.abs(malesA - malesB);
+}
+
 function genderGapPenalty(
   a: readonly AttendeeRef[],
   b: readonly AttendeeRef[],
   opts: BuildOptions,
 ): number {
   const config = opts.config ?? DEFAULT_SHUFFLE_CONFIG;
-  if (!config.genderBalance || !opts.genderOf) return 0;
-  let malesA = 0;
-  let malesB = 0;
-  for (const r of a) {
-    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
-    if (g === "unknown") return 0;
-    if (g === "male") malesA++;
-  }
-  for (const r of b) {
-    const g: Gender = opts.genderOf.get(refKeyOf(r)) ?? "unknown";
-    if (g === "unknown") return 0;
-    if (g === "male") malesB++;
-  }
-  const gap = Math.abs(malesA - malesB);
+  const gap = genderGapOf(a, b, opts);
+  if (gap === null) return 0;
   if (gap >= 2) return GENDER_GAP2[config.genderStrength];
   if (gap === 1) return GENDER_GAP1[config.genderStrength];
   return 0;
@@ -142,6 +152,67 @@ export function scoreCourts(courts: readonly Court[], hist: PairHistory, ss: Sam
   return s;
 }
 
+/** How many same-session repeats an arrangement contains.
+ *
+ *  The weights above are a price list, and a price is something an optimiser
+ *  will pay when it becomes worthwhile. A doubles court creates 2 partner
+ *  pairs but 4 opponent pairs, so opponent combinations run out twice as fast;
+ *  once they do, every candidate carries opponent penalties and one repeated
+ *  partnership (30) becomes cheaper than the two repeated opponents (40) it
+ *  buys off. Measured 2026-09-12: with 9 players that tips over exactly at
+ *  round 5 (0% at R4 → 11% at R5 → 22% at R6), which is the failure the club
+ *  actually hit. So repeats are RANKED AHEAD of the score instead of being
+ *  priced into it — the search may only take a repeat when every candidate
+ *  has one (6 players on one court, say).
+ */
+interface RepeatCount {
+  /** 女女 vs 男男 matchups. Ranked above everything: the rule it enforces is
+   *  "must effectively never happen when avoidable" (see GENDER_GAP2), which
+   *  outranks variety by design. */
+  genderGap2: number;
+  /** Pairs playing together again as partners. */
+  partner: number;
+  /** Doubles courts whose four players have already shared a court today. */
+  quad: number;
+}
+
+function teamPartnerRepeats(team: readonly AttendeeRef[], ss: SameSessionStats): number {
+  const ids = memberIdsFrom(team);
+  let n = 0;
+  for (let i = 0; i < ids.length; i++)
+    for (let j = i + 1; j < ids.length; j++)
+      if ((ss.partner.get(pairKey(ids[i]!, ids[j]!)) ?? 0) > 0) n++;
+  return n;
+}
+
+export function countRepeats(
+  courts: readonly Court[],
+  ss: SameSessionStats,
+  opts: BuildOptions = {},
+): RepeatCount {
+  let genderGap2 = 0;
+  let partner = 0;
+  let quad = 0;
+  for (const c of courts) {
+    partner += teamPartnerRepeats(c.teamA, ss) + teamPartnerRepeats(c.teamB, ss);
+    if ((genderGapOf(c.teamA, c.teamB, opts) ?? 0) >= 2) genderGap2++;
+    if (c.type === "doubles") {
+      const key = quadKey([...memberIdsFrom(c.teamA), ...memberIdsFrom(c.teamB)]);
+      if (key && (ss.quad?.get(key) ?? 0) > 0) quad++;
+    }
+  }
+  return { genderGap2, partner, quad };
+}
+
+/** Lexicographic: no 女女 vs 男男 first, then fewer repeated partnerships, then
+ *  fewer repeated foursomes, then the weighted score. Negative when `a` wins. */
+function compareCandidates(a: { rep: RepeatCount; score: number }, b: { rep: RepeatCount; score: number }): number {
+  if (a.rep.genderGap2 !== b.rep.genderGap2) return a.rep.genderGap2 - b.rep.genderGap2;
+  if (a.rep.partner !== b.rep.partner) return a.rep.partner - b.rep.partner;
+  if (a.rep.quad !== b.rep.quad) return a.rep.quad - b.rep.quad;
+  return a.score - b.score;
+}
+
 function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameSessionStats, opts: BuildOptions): [AttendeeRef[], AttendeeRef[]] {
   const mult = multOf(opts.config);
   const [a, b, c, d] = four;
@@ -151,15 +222,24 @@ function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameS
     [[a!, d!], [b!, c!]],
   ];
   let best = candidates[0]!;
-  let bestS = Infinity;
+  let bestKey: { rep: RepeatCount; score: number } | null = null;
   for (const [A, B] of candidates) {
-    const s =
-      teamPairScore(A, hist, ss, mult) +
-      teamPairScore(B, hist, ss, mult) +
-      oppScore(A, B, hist, ss, mult) +
-      genderGapPenalty(A, B, opts);
-    if (s < bestS) {
-      bestS = s;
+    // Same rule one level down: a split must not trade a repeated partnership
+    // for cheaper opponents either.
+    const key = {
+      rep: {
+        genderGap2: (genderGapOf(A, B, opts) ?? 0) >= 2 ? 1 : 0,
+        partner: teamPartnerRepeats(A, ss) + teamPartnerRepeats(B, ss),
+        quad: 0,
+      },
+      score:
+        teamPairScore(A, hist, ss, mult) +
+        teamPairScore(B, hist, ss, mult) +
+        oppScore(A, B, hist, ss, mult) +
+        genderGapPenalty(A, B, opts),
+    };
+    if (bestKey === null || compareCandidates(key, bestKey) < 0) {
+      bestKey = key;
       best = [A, B];
     }
   }
@@ -184,7 +264,7 @@ export function buildRound(
   opts: BuildOptions = {},
 ): { courts: Court[] } {
   let best: Court[] | null = null;
-  let bestScore = Infinity;
+  let bestKey: { rep: RepeatCount; score: number } | null = null;
 
   for (let attempt = 0; attempt < K_ATTEMPTS; attempt++) {
     const s = shuffle(seated, rng);
@@ -203,11 +283,14 @@ export function buildRound(
       singlesPenalty += singlesCourtPenalty(two, singlesCount, prevSingles);
       courts.push({ number: courts.length + 1, type: "singles", teamA: [two[0]!], teamB: [two[1]!], winner: "none" });
     }
-    const sc = scoreCourts(courts, hist, ss, opts) + singlesPenalty;
-    if (sc < bestScore) {
-      bestScore = sc;
+    const key = {
+      rep: countRepeats(courts, ss, opts),
+      score: scoreCourts(courts, hist, ss, opts) + singlesPenalty,
+    };
+    if (bestKey === null || compareCandidates(key, bestKey) < 0) {
+      bestKey = key;
       best = courts;
-      if (sc === 0) break;
+      if (key.rep.genderGap2 === 0 && key.rep.partner === 0 && key.rep.quad === 0 && key.score === 0) break;
     }
   }
 
