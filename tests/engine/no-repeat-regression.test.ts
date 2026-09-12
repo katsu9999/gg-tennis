@@ -89,6 +89,19 @@ describe("same-session repeats are ranked, not priced", () => {
     }
   }
 
+  it("2026-09-12 as played: 9 players / 2 courts / 5 rounds", () => {
+    // The night that surfaced this. 2 doubles courts need 8 opponent pairs per
+    // round, so 5 rounds demand 40 out of the 36 that exist for 9 players —
+    // opponent repeats become unavoidable at exactly round 5, which is where
+    // the search started paying for them with a repeated partnership
+    // (前田 & 翠川, rounds 4 and 5). Partner pairs only need 20 of 36, so zero
+    // partner repeats is always reachable and the tie-break must never sell it.
+    for (const seed of [1, 7, 42, 2026, 31337]) {
+      const { partnerRepeats } = runNight(9, 2, 5, seed);
+      expect(partnerRepeats, `seed ${seed}`).toBe(0);
+    }
+  });
+
   it("the same foursome is not put back on a court while alternatives exist", () => {
     // Partner and opponent counts alone miss this: re-forming {a,b,c,d} with
     // the teams swapped only costs two opponent repeats, which is cheaper than
