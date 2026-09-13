@@ -1,5 +1,5 @@
 import type { Court, PairHistory, SameSessionStats } from "./models";
-import { memberIdsFrom, pairKey } from "./models";
+import { memberIdsFrom, pairKey, quadKey } from "./models";
 
 export const LAMBDA_DEFAULT = 0.7;
 
@@ -46,6 +46,13 @@ export function applyRoundToSameSession(ss: SameSessionStats, courts: readonly C
     for (const a of A) {
       for (const b of B) {
         bump(ss.opp, pairKey(a, b));
+      }
+    }
+    if (c.type === "doubles") {
+      const key = quadKey([...A, ...B]);
+      if (key) {
+        ss.quad ??= new Map();
+        bump(ss.quad, key);
       }
     }
   }
