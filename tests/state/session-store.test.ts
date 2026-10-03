@@ -615,7 +615,7 @@ describe("shuffle config + gender (v1.6)", () => {
     await store.startNewSession({
       ...baseInput,
       memberIds: [1, 2, 3, 4],
-      shuffleConfig: { genderBalance: true, genderStrength: "strong", pairStrength: "mid", oppStrength: "mid" },
+      shuffleConfig: { genderBalance: true, genderStrength: "strong", pairStrength: "mid", oppStrength: "mid", avoidPairs: [] },
       memberGenders: new Map([
         [1, "male"],
         [2, "male"],

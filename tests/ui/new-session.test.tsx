@@ -125,6 +125,7 @@ beforeEach(() => {
   hoisted.getFromParamMock.mockReturnValue(null);
   currentPath.value = "/session/new";
   // Reset module-scoped form signals between tests to prevent state leakage.
+  localStorage.removeItem("cs_shuffle_rules");
   resetFormState();
 });
 
@@ -134,7 +135,7 @@ describe("NewSessionPage", () => {
     await waitFor(() => expect(getByText("日付")).toBeDefined());
     expect(getByText("会場")).toBeDefined();
     expect(getByText("コート数 (1-6)")).toBeDefined();
-    expect(await findByText("佐藤")).toBeDefined();
+    expect(await findByText("佐藤", { selector: "button" })).toBeDefined();
   });
 
   it("submit is disabled until at least 2 members and location are set", async () => {
@@ -189,6 +190,57 @@ describe("NewSessionPage", () => {
     }));
     // navigate() is called after the async venueRepo.add() resolves, so wait for it.
     await waitFor(() => expect(currentPath.value).toBe("/session/number-map"));
+  });
+
+  it("keep-apart pairs are for tonight only: sent with the session, never remembered", async () => {
+    const { findByTestId, getByTestId, getByText, findByLabelText, queryByTestId, unmount } = render(<NewSessionPage />);
+    const pickA = (await findByTestId("avoid-pick-a")) as HTMLSelectElement;
+    const pickB = getByTestId("avoid-pick-b") as HTMLSelectElement;
+    const add = getByTestId("avoid-add") as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+
+    // Same person on both sides is not a pair.
+    fireEvent.change(pickA, { target: { value: "3" } });
+    fireEvent.change(pickB, { target: { value: "3" } });
+    await waitFor(() => expect(add.disabled).toBe(true));
+
+    // Add two pairs, then remove one.
+    fireEvent.change(pickB, { target: { value: "1" } });
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    const chip = await findByTestId("avoid-pair-1-3");
+    expect(chip.textContent).toContain("佐藤 × 田中");
+    fireEvent.change(pickA, { target: { value: "2" } });
+    fireEvent.change(pickB, { target: { value: "3" } });
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    await findByTestId("avoid-pair-2-3");
+    fireEvent.click(await findByLabelText("山本 と 田中 の設定を外す"));
+    await waitFor(() => expect(queryByTestId("avoid-pair-2-3")).toBeNull());
+
+    fireEvent.click(await findByTestId("member-1"));
+    fireEvent.click(await findByTestId("member-2"));
+    const btn = getByText(/次へ：番号を抽選/).closest("button")!;
+    await waitFor(() => expect(btn.disabled).toBe(false));
+    fireEvent.click(btn);
+    await waitFor(() => expect(hoisted.startNewSessionMock).toHaveBeenCalled());
+    expect(hoisted.startNewSessionMock.mock.calls[0]![0].shuffleConfig.avoidPairs).toEqual([[1, 3]]);
+
+    // Next night starts empty: nothing stored, nothing shown.
+    expect(JSON.parse(localStorage.getItem("cs_shuffle_rules")!).avoidPairs).toEqual([]);
+    unmount();
+    resetFormState();
+    const view2 = render(<NewSessionPage />);
+    await view2.findByTestId("avoid-pick-a");
+    expect(view2.queryByTestId("avoid-pair-1-3")).toBeNull();
+  });
+
+  it("ignores keep-apart pairs left in storage by an older build", async () => {
+    localStorage.setItem("cs_shuffle_rules", JSON.stringify({ ...DEFAULT_SHUFFLE_CONFIG, avoidPairs: [[1, 2]] }));
+    resetFormState();
+    const { findByTestId, queryByTestId } = render(<NewSessionPage />);
+    await findByTestId("avoid-pick-a");
+    expect(queryByTestId("avoid-pair-1-2")).toBeNull();
   });
 
   it("preloads from planned session when ?from=<id> is in the URL", async () => {
