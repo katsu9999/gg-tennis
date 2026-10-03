@@ -73,6 +73,8 @@ export function resetFormState(): void {
   error.value = null;
   plannedSessionId.value = null;
   rules.value = loadStoredRules();
+  avoidPickA.value = null;
+  avoidPickB.value = null;
 }
 
 function toggle(id: number): void {
@@ -147,6 +149,52 @@ async function submit(): Promise<void> {
   } finally {
     submitting.value = false;
   }
+}
+
+/** Two-member picker for the "keep off the same court" rule. */
+const avoidPickA = signal<number | null>(null);
+const avoidPickB = signal<number | null>(null);
+
+function memberName(id: number): string {
+  return rosterStore.all.value.find((m) => m.id === id)?.name ?? `#${id}`;
+}
+
+function addAvoidPair(): void {
+  const a = avoidPickA.value;
+  const b = avoidPickB.value;
+  if (a === null || b === null || a === b) return;
+  const pair: [number, number] = a < b ? [a, b] : [b, a];
+  if (rules.value.avoidPairs.some(([x, y]) => x === pair[0] && y === pair[1])) return;
+  rules.value = { ...rules.value, avoidPairs: [...rules.value.avoidPairs, pair] };
+  storeRules(rules.value);
+  avoidPickA.value = null;
+  avoidPickB.value = null;
+}
+
+function removeAvoidPair(i: number): void {
+  rules.value = { ...rules.value, avoidPairs: rules.value.avoidPairs.filter((_, j) => j !== i) };
+  storeRules(rules.value);
+}
+
+function MemberSelect({ value, testId, onChange }: {
+  value: number | null;
+  testId: string;
+  onChange: (id: number | null) => void;
+}) {
+  return (
+    <select
+      data-testid={testId}
+      value={value === null ? "" : String(value)}
+      onChange={(e) => {
+        const v = (e.currentTarget as HTMLSelectElement).value;
+        onChange(v === "" ? null : Number(v));
+      }}
+      style={{ padding: 6, fontSize: 14, borderRadius: 8, border: "2px solid var(--line)" }}
+    >
+      <option value="">—</option>
+      {rosterStore.active.value.map((m) => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
+    </select>
+  );
 }
 
 function StrengthPicker({ value, disabled, onChange }: {
@@ -267,6 +315,47 @@ export function NewSessionPage() {
         <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.newSession.rulesTitle}</h3>
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 14 }}>1. {t.newSession.ruleRest} <span class="muted">🔒</span></div>
+          <div>
+            <div style={{ fontSize: 14, marginBottom: 6 }}>2. 🚫 {t.newSession.ruleAvoid}</div>
+            {rules.value.avoidPairs.length === 0 ? (
+              <p class="muted" style={{ margin: "0 0 6px", fontSize: 13 }}>{t.newSession.ruleAvoidNone}</p>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                {rules.value.avoidPairs.map(([a, b], i) => (
+                  <span
+                    key={`${a}:${b}`}
+                    data-testid={`avoid-pair-${a}-${b}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 4px 2px 10px", fontSize: 13, fontWeight: 700, borderRadius: 999, border: "2px solid var(--line)" }}
+                  >
+                    {memberName(a)} × {memberName(b)}
+                    <button
+                      type="button"
+                      aria-label={t.newSession.ruleAvoidRemove(memberName(a), memberName(b))}
+                      onClick={() => removeAvoidPair(i)}
+                      style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <MemberSelect value={avoidPickA.value} testId="avoid-pick-a" onChange={(id) => { avoidPickA.value = id; }} />
+              <span>×</span>
+              <MemberSelect value={avoidPickB.value} testId="avoid-pick-b" onChange={(id) => { avoidPickB.value = id; }} />
+              <button
+                type="button"
+                data-testid="avoid-add"
+                disabled={avoidPickA.value === null || avoidPickB.value === null || avoidPickA.value === avoidPickB.value}
+                onClick={addAvoidPair}
+                style={{ padding: "4px 12px", fontSize: 13, fontWeight: 700, borderRadius: 8, border: "2px solid var(--line)", background: "var(--card)", cursor: "pointer" }}
+              >
+                {t.newSession.ruleAvoidAdd}
+              </button>
+            </div>
+            <p class="muted" style={{ margin: "6px 0 0", fontSize: 12 }}>{t.newSession.ruleAvoidHint}</p>
+          </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <label style={{ fontSize: 14 }}>
               <input
@@ -275,7 +364,7 @@ export function NewSessionPage() {
                 checked={rules.value.genderBalance}
                 onInput={(e) => { rules.value = { ...rules.value, genderBalance: (e.currentTarget as HTMLInputElement).checked }; }}
               />
-              {" "}2. ⚥ {t.newSession.ruleGender}
+              {" "}3. ⚥ {t.newSession.ruleGender}
             </label>
             <StrengthPicker
               value={rules.value.genderStrength}
@@ -284,11 +373,11 @@ export function NewSessionPage() {
             />
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14 }}>3. {t.newSession.rulePair}</span>
+            <span style={{ fontSize: 14 }}>4. {t.newSession.rulePair}</span>
             <StrengthPicker value={rules.value.pairStrength} onChange={(s) => { rules.value = { ...rules.value, pairStrength: s }; }} />
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14 }}>4. {t.newSession.ruleOpp}</span>
+            <span style={{ fontSize: 14 }}>5. {t.newSession.ruleOpp}</span>
             <StrengthPicker value={rules.value.oppStrength} onChange={(s) => { rules.value = { ...rules.value, oppStrength: s }; }} />
           </div>
           {rules.value.genderBalance && (

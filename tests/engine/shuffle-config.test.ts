@@ -21,8 +21,21 @@ describe("normalizeShuffleConfig", () => {
       genderStrength: "strong",
       pairStrength: "weak",
       oppStrength: "mid",
+      avoidPairs: [[3, 7]],
     };
     expect(normalizeShuffleConfig(c)).toEqual(c);
+  });
+
+  it("defaults avoidPairs to [] for configs saved before the rule existed", () => {
+    const old = { genderBalance: true, genderStrength: "mid", pairStrength: "mid", oppStrength: "mid" };
+    expect(normalizeShuffleConfig(old).avoidPairs).toEqual([]);
+  });
+
+  it("cleans avoidPairs: low-first, drops self-pairs, junk and duplicates", () => {
+    const c = normalizeShuffleConfig({
+      avoidPairs: [[7, 3], [3, 7], [5, 5], [1], ["a", 2], [2.5, 4], "x", [4, 9]],
+    });
+    expect(c.avoidPairs).toEqual([[3, 7], [4, 9]]);
   });
 
   it("does not share the DEFAULT object (mutation safety)", () => {
