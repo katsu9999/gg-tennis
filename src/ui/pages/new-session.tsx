@@ -39,13 +39,15 @@ const error = signal<string | null>(null);
 /** Tracks the ?from=<plannedSessionId> query param. Set when preloading from a planned session. */
 const plannedSessionId = signal<string | null>(null);
 
-/** Shuffle rules — remembered across sessions on this device. */
+/** Shuffle rules — remembered across sessions on this device, except
+ *  avoidPairs: who must be kept apart changes every night, so it always
+ *  starts empty and lives only in that session's shuffle_config. */
 const RULES_STORAGE_KEY = "cs_shuffle_rules";
 
 function loadStoredRules(): ShuffleConfig {
   try {
     const raw = localStorage.getItem(RULES_STORAGE_KEY);
-    return normalizeShuffleConfig(raw ? JSON.parse(raw) : null);
+    return { ...normalizeShuffleConfig(raw ? JSON.parse(raw) : null), avoidPairs: [] };
   } catch {
     return { ...DEFAULT_SHUFFLE_CONFIG };
   }
@@ -53,7 +55,7 @@ function loadStoredRules(): ShuffleConfig {
 
 function storeRules(c: ShuffleConfig): void {
   try {
-    localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(c));
+    localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify({ ...c, avoidPairs: [] }));
   } catch {
     /* private mode etc. — non-fatal */
   }
@@ -166,14 +168,12 @@ function addAvoidPair(): void {
   const pair: [number, number] = a < b ? [a, b] : [b, a];
   if (rules.value.avoidPairs.some(([x, y]) => x === pair[0] && y === pair[1])) return;
   rules.value = { ...rules.value, avoidPairs: [...rules.value.avoidPairs, pair] };
-  storeRules(rules.value);
   avoidPickA.value = null;
   avoidPickB.value = null;
 }
 
 function removeAvoidPair(i: number): void {
   rules.value = { ...rules.value, avoidPairs: rules.value.avoidPairs.filter((_, j) => j !== i) };
-  storeRules(rules.value);
 }
 
 function MemberSelect({ value, testId, onChange }: {
