@@ -330,6 +330,16 @@ export const ja = {
     attendanceCount: (n: number) => `${n}回`,
     noSessions: "過去のセッションがありません。",
   },
+  entry: {
+    title: "GG メンバー専用",
+    hint: "この端末で初めて開くときだけ、クラブ PIN を入れてください。",
+    enter: "開く",
+    remember: "一度入れると、この端末では次から聞きません",
+    forgetTitle: "この端末の入室",
+    forgetHint: "共用の端末で使い終わったら、ここで締め出せます（次に開くとき PIN を聞きます）。",
+    forget: "この端末を締め出す",
+    forgetConfirm: "この端末を締め出します。次に開くときは PIN が必要です。よろしいですか？",
+  },
   clubs: {
     title: "クラブの追加",
     intro: "別のクラブ用のシャッフル・ランキングを作ります。名簿・ランキング・過去セッション・PIN はクラブごとに完全に別で、GG のデータとは混ざりません。",
@@ -698,6 +708,16 @@ export const en: Strings = {
     noPairs: "No pairs with at least 3 matches yet.",
     attendanceCount: (n: number) => `${n} ${n === 1 ? "session" : "sessions"}`,
     noSessions: "No past sessions.",
+  },
+  entry: {
+    title: "GG members only",
+    hint: "Enter the club PIN the first time you open the app on this device.",
+    enter: "Open",
+    remember: "Once entered, this device won't ask again",
+    forgetTitle: "Access on this device",
+    forgetHint: "On a shared device, lock it again when you're done (the PIN will be asked next time).",
+    forget: "Lock this device",
+    forgetConfirm: "Lock this device? The PIN will be needed next time.",
   },
   clubs: {
     title: "Add a club",

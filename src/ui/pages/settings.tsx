@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
-import { isGgClub } from "@/data/club";
+import { appDialog } from "@/ui/components/app-dialog";
+import { forgetEntry, rememberEntry } from "@/state/entry-lock";
+import { clubId, isGgClub } from "@/data/club";
 import { hostStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { linkTo } from "@/ui/router";
@@ -21,6 +23,25 @@ export function SettingsPage() {
           {t.settings.outdoorHint3}
         </p>
       </section>
+
+      {isGgClub() && (
+        <section class="card" style={{ marginBottom: 16 }} data-testid="entry-forget-card">
+          <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.entry.forgetTitle}</h3>
+          <p class="muted" style={{ fontSize: 14, margin: "8px 0" }}>{t.entry.forgetHint}</p>
+          <button
+            type="button"
+            data-testid="entry-forget"
+            onClick={async () => {
+              if (!(await appDialog.confirm(t.entry.forgetConfirm))) return;
+              pinStore.lock();
+              forgetEntry(clubId());
+            }}
+            style={{ background: "transparent", border: "1.5px solid var(--line)", borderRadius: 8, padding: "6px 12px", fontWeight: 700, cursor: "pointer" }}
+          >
+            {t.entry.forget}
+          </button>
+        </section>
+      )}
 
       {isGgClub() && (
         <section class="card" style={{ marginBottom: 16 }}>
@@ -93,6 +114,9 @@ function PinCard() {
       setErr(e instanceof Error ? e.message : String(e));
       return;
     }
+    // この端末の入室 PIN も新しい PIN に。古いままだと次の起動で締め出される。
+    // 他の端末は次の起動時に照合が外れて PIN を聞かれる（変えた PIN を知る人だけ入れる）。
+    if (isGgClub()) rememberEntry(clubId(), newPin);
     setNewPin("");
     setMsg(t.settings.pinUpdated);
   }

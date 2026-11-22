@@ -17,7 +17,7 @@ import { createMatchLogRepository } from "@/data/match-log-repository";
 import { createSessionRepository } from "@/data/session-repository";
 import { createPlannedSessionRepository } from "@/data/planned-session-repository";
 import { createRsvpRepository } from "@/data/rsvp-repository";
-import { createClub, listClubs, loadClubBySlug } from "@/data/club";
+import { clubId, createClub, listClubs, loadClubBySlug } from "@/data/club";
 
 import { createHostStore } from "@/state/host-store";
 import { createPinStore } from "@/state/pin-store";
@@ -57,4 +57,11 @@ export function listAllClubs() {
 }
 export function createNewClub(input: Parameters<typeof createClub>[1]) {
   return createClub(supabase, input);
+}
+
+/** 入室 PIN の裏での照合。pinStore は解錠しない。true/false、通信失敗・ロック中は null。 */
+export async function checkClubPin(pin: string): Promise<boolean | null> {
+  const { data, error } = await supabase.rpc("verify_club_pin", { pin_input: pin, p_club: clubId() });
+  if (error) return null;
+  return data === true;
 }

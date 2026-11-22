@@ -64,3 +64,7 @@ export async function createNewClub(input: unknown): Promise<number> {
   void input;
   throw new Error("clubs are not available in the local flavour");
 }
+export async function checkClubPin(pin: string): Promise<boolean | null> {
+  void pin;
+  return true;
+}

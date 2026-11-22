@@ -1,7 +1,9 @@
 import { render } from "preact";
+import { EntryGate } from "@/ui/components/entry-gate";
+import { entryUnlocked, initEntryLock, recheckEntry } from "@/state/entry-lock";
 import { computed } from "@preact/signals";
 import { clubSlugFromPath, currentPath, matchRoute, setClubPrefix } from "@/ui/router";
-import { loadClub, sessionStore } from "@/ui/stores";
+import { checkClubPin, loadClub, sessionStore } from "@/ui/stores";
 import { currentClub, type Club } from "@/data/club";
 import { setLocale } from "@/ui/i18n";
 import "@/ui/theme.css";
@@ -51,10 +53,14 @@ function ComingSoon({ name }: { name: string }) {
   );
 }
 
+// 入室 PIN が無くても開ける画面（公開の出欠リンクとプライバシー表記）。
+const OPEN_ROUTES: ReadonlySet<string> = new Set(["public-rsvp", "privacy"]);
+
 function App() {
+  const gated = !entryUnlocked.value && !OPEN_ROUTES.has(route.value.name);
   return (
     <>
-      <CurrentPage />
+      {gated ? <EntryGate /> : <CurrentPage />}
       <AppDialogHost />
     </>
   );
@@ -134,7 +140,12 @@ async function boot(): Promise<void> {
     setLocale(club.locale);
     document.title = `${club.name} — Court Shuffle`;
   }
-  void sessionStore.resume();
+  // 入室 PIN は GG だけ（別クラブの幹事が GG を開けないように）。
+  const gate = !IS_LOCAL && currentClub.value.id === 1;
+  initEntryLock(currentClub.value.id, gate);
+  if (gate) void recheckEntry(currentClub.value.id, checkClubPin);
+  // 締め出し中は何も読まない。PIN を入れて開いた時点で今日のセッションを復元する。
+  entryUnlocked.subscribe((open) => { if (open) void sessionStore.resume(); });
   render(<App />, appRoot);
 
   // GG は起動時にクラブを読まない（オフライン起動を止めないため）。代わりに裏で
