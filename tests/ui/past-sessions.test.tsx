@@ -157,3 +157,79 @@ describe("PastSessionsPage", () => {
     expect(args.teamB).toEqual([2]);
   });
 });
+
+describe("PastSessionsPage — 選手の入れ替えと順位", () => {
+  // 1番 vs 2番、1番勝ち。3番（田中）は休憩だった。
+  const withRester = {
+    ...sampleSession,
+    attendees: [
+      ...sampleSession.attendees,
+      { ref: { kind: "member", memberId: 3 }, todayNumber: 3, isGuest: false },
+    ],
+    rounds: [{ ...sampleSession.rounds[0]!, resters: [{ kind: "member", memberId: 3 }] }],
+  };
+
+  it("詳細にその日の順位が出る", async () => {
+    sr.loadPast.mockResolvedValue([withRester]);
+    const { findByTestId, getByTestId, getAllByTestId } = render(<PastSessionsPage />);
+    fireEvent.click(await findByTestId("past-s1"));
+    await waitFor(() => expect(getByTestId("past-standings")).toBeDefined());
+    const rows = getAllByTestId("standings-row");
+    expect(rows[0]!.textContent).toContain("佐藤");
+    expect(rows[0]!.textContent).toContain("🥇");
+  });
+
+  it("入れ替えると PIN 付き RPC で、代わりの人に勝敗が付く", async () => {
+    sr.loadPast.mockResolvedValue([withRester]);
+    ml.editPastCourtWinner.mockClear();
+    const { appDialog } = await import("@/ui/components/app-dialog");
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    const { findByTestId, getByTestId } = render(<PastSessionsPage />);
+    fireEvent.click(await findByTestId("past-s1"));
+    fireEvent.click(await findByTestId("past-swap-btn-0"));
+
+    fireEvent.change(getByTestId("past-swap-out"), { target: { value: JSON.stringify({ kind: "member", memberId: 1 }) } });
+    fireEvent.change(getByTestId("past-swap-in"), { target: { value: JSON.stringify({ kind: "member", memberId: 3 }) } });
+    fireEvent.click(getByTestId("past-swap-apply"));
+
+    await waitFor(() => expect(ml.editPastCourtWinner).toHaveBeenCalled());
+    const last = ml.editPastCourtWinner.mock.calls.at(-1)![0];
+    expect(last).toMatchObject({ pin: "1234", teamA: [3], teamB: [2], winner: "A" });
+    confirmSpy.mockRestore();
+  });
+});
+
+describe("PastSessionsPage — 入れ替え中の勝敗タップ", () => {
+  it("入れ替えの通信中は勝敗をタップしても RPC を呼ばない", async () => {
+    const withRester = {
+      ...sampleSession,
+      attendees: [
+        ...sampleSession.attendees,
+        { ref: { kind: "member", memberId: 3 }, todayNumber: 3, isGuest: false },
+      ],
+      rounds: [{ ...sampleSession.rounds[0]!, resters: [{ kind: "member", memberId: 3 }] }],
+    };
+    sr.loadPast.mockResolvedValue([withRester]);
+    let release: () => void = () => undefined;
+    ml.editPastCourtWinner.mockReset().mockImplementation(() => new Promise<void>((r) => { release = r; }));
+    const { appDialog } = await import("@/ui/components/app-dialog");
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    const { findByTestId, getByTestId, container } = render(<PastSessionsPage />);
+    fireEvent.click(await findByTestId("past-s1"));
+    fireEvent.click(await findByTestId("past-swap-btn-0"));
+    fireEvent.change(getByTestId("past-swap-out"), { target: { value: JSON.stringify({ kind: "member", memberId: 2 }) } });
+    fireEvent.change(getByTestId("past-swap-in"), { target: { value: JSON.stringify({ kind: "member", memberId: 3 }) } });
+    fireEvent.click(getByTestId("past-swap-apply"));
+    await waitFor(() => expect(ml.editPastCourtWinner).toHaveBeenCalledTimes(1));
+
+    // 通信中に勝敗側をタップ
+    const teamButtons = container.querySelectorAll("[data-testid='team-a'], [data-testid='team-b']");
+    expect(teamButtons.length).toBeGreaterThan(0);
+    teamButtons.forEach((b) => fireEvent.click(b));
+    expect(ml.editPastCourtWinner).toHaveBeenCalledTimes(1);
+
+    release();
+    confirmSpy.mockRestore();
+    ml.editPastCourtWinner.mockReset().mockResolvedValue(undefined);
+  });
+});

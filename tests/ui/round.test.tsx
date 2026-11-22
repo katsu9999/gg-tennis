@@ -297,3 +297,36 @@ describe("RoundPage — LINE 再送ボタン", () => {
     spy.mockRestore();
   });
 });
+
+describe("RoundPage — まとめて作成ボタンと今日の順位", () => {
+  it("R1 だけで勝敗も無いときは「6ラウンド分まとめて作成」が出る（番号表から来ると R1 は必ずある）", () => {
+    sessionStore.session.value = makeSession(makeRound());
+    const { getByTestId } = render(<RoundPage />);
+    expect(getByTestId("generate-all-btn")).toBeTruthy();
+  });
+
+  it("勝敗を付けたあと・2本目以降は出ない", () => {
+    const r = makeRound();
+    r.courts[0]!.winner = "A";
+    sessionStore.session.value = makeSession(r);
+    const { queryByTestId } = render(<RoundPage />);
+    expect(queryByTestId("generate-all-btn")).toBeNull();
+
+    const two = makeSession(makeRound());
+    sessionStore.session.value = { ...two, rounds: [two.rounds[0]!, { ...two.rounds[0]!, index: 1 }], currentRoundIndex: 1 };
+    const again = render(<RoundPage />);
+    expect(again.queryAllByTestId("generate-all-btn")).toHaveLength(0);
+  });
+
+  it("「今日の順位」を開くと、付けた勝敗で並んだ順位が出る", () => {
+    const r = makeRound();
+    r.courts[0]!.winner = "B";
+    sessionStore.session.value = makeSession(r);
+    const { getByTestId, getAllByTestId } = render(<RoundPage />);
+    fireEvent.click(getByTestId("standings-toggle"));
+    expect(getByTestId("live-standings")).toBeTruthy();
+    // B チーム（3,4 = 今日の番号 1,5）が上
+    const firstTwo = getAllByTestId("standings-row").slice(0, 2).map((row) => row.textContent);
+    expect(firstTwo.every((txt) => txt!.includes("🥇"))).toBe(true);
+  });
+});

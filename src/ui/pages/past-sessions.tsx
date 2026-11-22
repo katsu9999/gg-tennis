@@ -11,14 +11,24 @@ import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
 import { buildSummaryPayload, offerSessionSummary } from "@/ui/line-notify";
+import { StandingsTable } from "@/ui/components/standings-table";
+import { swapPastPlayer } from "@/state/past-swap";
+import type { Round } from "@/engine/models";
 
 const list = signal<SessionRow[]>([]);
 const loading = signal(true);
 const selected = signal<SessionRow | null>(null);
 const showNames = signal(false);
 const busy = signal(false);
+/** 選手入れ替えフォームを開いているラウンド（index）と、選んだ2人（JSON.stringify(ref)）。 */
+const swapRound = signal<number | null>(null);
+const swapOut = signal("");
+const swapIn = signal("");
 
 export function resetPastSessionsState(): void {
+  swapRound.value = null;
+  swapOut.value = "";
+  swapIn.value = "";
   list.value = [];
   loading.value = true;
   selected.value = null;
@@ -135,12 +145,17 @@ function SessionDetail({ session }: { session: SessionRow }) {
   };
 
   function handleSetWinner(roundIndex: number, courtNumber: number, w: "A" | "B" | null) {
+    // 入れ替え（RPC 2回）の途中に勝敗を変えると、古いチームの記録が作り直されて
+    // 新旧2行が残る。どちらかの処理中はもう一方を受け付けない。
+    if (busy.value) return;
     gate(async () => {
+      if (busy.value) return;
       const pin = pinStore.getPin();
       if (!pin) {
         void appDialog.alert(t.past.pinUnavailable);
         return;
       }
+      busy.value = true;
       try {
         const updated = await updatePastCourtWinner(session, roundIndex, courtNumber, w, pin);
         selected.value = updated;
@@ -150,6 +165,47 @@ function SessionDetail({ session }: { session: SessionRow }) {
       } catch (e) {
         console.error("update past winner failed", e);
         void appDialog.alert(t.past.updateWinnerFailed(formatError(e)));
+      } finally {
+        busy.value = false;
+      }
+    });
+  }
+
+  const labelOf = (ref: AttendeeRef): string => {
+    const a = attendees.find((x) => JSON.stringify(x.ref) === JSON.stringify(ref));
+    const name = nameFor(ref) ?? a?.guestName ?? "?";
+    return a ? `${a.todayNumber} ${name}` : name;
+  };
+
+  function handleSwap(roundIndex: number, out: AttendeeRef, incoming: AttendeeRef) {
+    if (busy.value) return;
+    gate(async () => {
+      if (busy.value) return;
+      const pin = pinStore.getPin();
+      if (!pin) {
+        void appDialog.alert(t.past.pinUnavailable);
+        return;
+      }
+      busy.value = true;
+      try {
+        const rounds2 = await swapPastPlayer(matchLogRepo, {
+          pin,
+          sessionId: session.id,
+          rounds: roundsOf(session) as unknown as Round[],
+          roundIndex,
+          out,
+          incoming,
+        });
+        const updated = { ...session, rounds: rounds2 as unknown[] };
+        selected.value = updated;
+        list.value = list.value.map((s) => (s.id === updated.id ? updated : s));
+        swapRound.value = null;
+        void rankingStore.load();
+      } catch (e) {
+        console.error("swap past player failed", e);
+        void appDialog.alert(t.past.swapFailed(formatError(e)));
+      } finally {
+        busy.value = false;
       }
     });
   }
@@ -259,9 +315,108 @@ function SessionDetail({ session }: { session: SessionRow }) {
         {" "}{t.common.showNames}
       </label>
 
+      <section class="card" data-testid="past-standings" style={{ marginBottom: 12 }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>{t.past.standingsTitle}</h3>
+        <StandingsTable rounds={rounds} attendees={attendees} nameFor={nameFor} />
+      </section>
+
       {rounds.map((round) => (
         <section key={round.index} data-testid={`past-round-${round.index}`} style={{ marginBottom: 12 }}>
-          <h3 style={{ margin: "6px 0", fontSize: 14 }}>R{round.index + 1}</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: "6px 0", fontSize: 14 }}>R{round.index + 1}</h3>
+            {!IS_LOCAL && swapRound.value !== round.index && (
+              <button
+                type="button"
+                data-testid={`past-swap-btn-${round.index}`}
+                onClick={() => { swapRound.value = round.index; swapOut.value = ""; swapIn.value = ""; }}
+                style={{
+                  background: "transparent",
+                  border: "1.5px solid var(--line)",
+                  borderRadius: 8,
+                  padding: "2px 10px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {t.past.swapBtn}
+              </button>
+            )}
+          </div>
+          {swapRound.value === round.index && (() => {
+            const playing = round.courts.flatMap((c) => [...c.teamA, ...c.teamB]);
+            const playingKeys = new Set(playing.map((r) => JSON.stringify(r)));
+            const others = attendees.map((a) => a.ref).filter((r) => !playingKeys.has(JSON.stringify(r)));
+            const outRef = playing.find((r) => JSON.stringify(r) === swapOut.value);
+            const inRef = others.find((r) => JSON.stringify(r) === swapIn.value);
+            const selectStyle = { display: "block", width: "100%", marginTop: 4, padding: 8, fontSize: 15 };
+            return (
+              <div class="card" data-testid="past-swap-form" style={{ marginBottom: 8 }}>
+                <strong style={{ fontSize: 14 }}>{t.past.swapTitle(round.index + 1)}</strong>
+                <label style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700 }}>
+                  {t.past.swapOut}
+                  <select
+                    data-testid="past-swap-out"
+                    value={swapOut.value}
+                    onChange={(e) => { swapOut.value = (e.currentTarget as HTMLSelectElement).value; }}
+                    style={selectStyle}
+                  >
+                    <option value="">—</option>
+                    {playing.map((r) => (
+                      <option key={JSON.stringify(r)} value={JSON.stringify(r)}>{labelOf(r)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700 }}>
+                  {t.past.swapIn}
+                  <select
+                    data-testid="past-swap-in"
+                    value={swapIn.value}
+                    onChange={(e) => { swapIn.value = (e.currentTarget as HTMLSelectElement).value; }}
+                    style={selectStyle}
+                  >
+                    <option value="">—</option>
+                    {others.map((r) => (
+                      <option key={JSON.stringify(r)} value={JSON.stringify(r)}>{labelOf(r)}</option>
+                    ))}
+                  </select>
+                </label>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    data-testid="past-swap-apply"
+                    style={{ flex: 1 }}
+                    disabled={!outRef || !inRef || busy.value}
+                    onClick={async () => {
+                      if (!outRef || !inRef) return;
+                      if (!(await appDialog.confirm(
+                        t.past.swapConfirm(labelOf(outRef), labelOf(inRef), round.index + 1),
+                      ))) return;
+                      handleSwap(round.index, outRef, inRef);
+                    }}
+                  >
+                    {t.past.swapApply}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="past-swap-cancel"
+                    onClick={() => { swapRound.value = null; }}
+                    style={{
+                      flex: 1,
+                      background: "transparent",
+                      border: "1.5px solid var(--line)",
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.past.swapCancel}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
           {round.courts.map((c) => (
             <CourtView
               key={c.number}
@@ -269,7 +424,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
               todayNumbers={todayNumbers}
               nameFor={nameFor}
               showNames={showNames.value}
-              winnerTapEnabled={!IS_LOCAL}
+              winnerTapEnabled={!IS_LOCAL && !busy.value}
               onSetWinner={(w) => { void handleSetWinner(round.index, c.number, w); }}
             />
           ))}
@@ -311,7 +466,7 @@ export function PastSessionsPage() {
             cursor: "pointer",
             marginBottom: 8,
           }}
-          onClick={() => { selected.value = s; }}
+          onClick={() => { selected.value = s; swapRound.value = null; }}
         >
           <span>
             <strong>{s.date}</strong>{" "}

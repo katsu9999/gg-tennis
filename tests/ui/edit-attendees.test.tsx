@@ -27,9 +27,10 @@ vi.mock("@/ui/stores", async () => {
       session: signal(null),
       generating: signal(false),
       changeAttendees: vi.fn().mockResolvedValue({
-        added: 1, left: 0, regeneratedFrom: 2, totalRounds: 6,
+        added: 1, left: 0, substituted: 0, regeneratedFrom: 2, futureMode: "regenerated", totalRounds: 6,
       }),
       resume: vi.fn().mockResolvedValue(undefined),
+      suggestSubstitutes: vi.fn().mockReturnValue([]),
     },
   };
 });
@@ -92,6 +93,7 @@ function makeSession(roundCount = 6, currentRoundIndex = 1) {
 beforeEach(() => {
   resetEditAttendeesState();
   vi.mocked(sessionStore.changeAttendees).mockClear();
+  vi.mocked(sessionStore.suggestSubstitutes).mockReset().mockReturnValue([]);
   vi.mocked(offerRemainingRoundsNotify).mockClear();
   vi.mocked(rosterStore.load).mockClear();
   sessionStore.session.value = makeSession();
@@ -187,7 +189,7 @@ describe("EditAttendeesPage", () => {
 
   it("組み直しがなければ LINE 再送は聞かない", async () => {
     vi.mocked(sessionStore.changeAttendees).mockResolvedValueOnce({
-      added: 1, left: 0, regeneratedFrom: null, totalRounds: 2,
+      added: 1, left: 0, substituted: 0, regeneratedFrom: null, futureMode: null, totalRounds: 2,
     });
     const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
     render(<EditAttendeesPage />);
@@ -208,5 +210,101 @@ describe("EditAttendeesPage", () => {
     for (const id of [2, 3, 4]) fireEvent.click(screen.getByTestId(`edit-member-${id}`));
 
     expect((screen.getByTestId("apply-attendees-btn") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("EditAttendeesPage — ラウンドの途中で帰る人の代役", () => {
+  /** 1-5番が参加、R2 表示中で 5番が休憩。 */
+  function sessionWithRester() {
+    const base = makeSession();
+    return {
+      ...base,
+      attendees: [1, 2, 3, 4, 5].map((memberId, i) => ({
+        ref: { kind: "member" as const, memberId },
+        todayNumber: i + 1,
+        isGuest: false,
+      })),
+      rounds: base.rounds.map((r) => ({ ...r, resters: [{ kind: "member" as const, memberId: 5 }] })),
+    };
+  }
+
+  it("コートにいる人を外すと代役を選ぶ欄が出て、一番手の候補が既定で入る", async () => {
+    sessionStore.session.value = sessionWithRester();
+    vi.mocked(sessionStore.suggestSubstitutes).mockReturnValue([{ kind: "member", memberId: 5 }]);
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    render(<EditAttendeesPage />);
+    await waitFor(() => expect(screen.getByTestId("edit-member-4")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("edit-member-4"));
+    await waitFor(() => expect(screen.getByTestId("subs-card")).toBeTruthy());
+    expect((screen.getByTestId("sub-select-4") as HTMLSelectElement).value).toBe("5");
+
+    fireEvent.click(screen.getByTestId("apply-attendees-btn"));
+    await waitFor(() => expect(sessionStore.changeAttendees).toHaveBeenCalled());
+    const arg = vi.mocked(sessionStore.changeAttendees).mock.calls[0]![0];
+    expect([...(arg.currentSubstitutes ?? new Map())]).toEqual([[4, 5]]);
+    confirmSpy.mockRestore();
+  });
+
+  it("「代わりなし」を選べば今のラウンドは変えない", async () => {
+    sessionStore.session.value = sessionWithRester();
+    vi.mocked(sessionStore.suggestSubstitutes).mockReturnValue([{ kind: "member", memberId: 5 }]);
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    render(<EditAttendeesPage />);
+    await waitFor(() => expect(screen.getByTestId("edit-member-4")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("edit-member-4"));
+    await waitFor(() => expect(screen.getByTestId("sub-select-4")).toBeTruthy());
+    fireEvent.change(screen.getByTestId("sub-select-4"), { target: { value: "" } });
+
+    fireEvent.click(screen.getByTestId("apply-attendees-btn"));
+    await waitFor(() => expect(sessionStore.changeAttendees).toHaveBeenCalled());
+    const arg = vi.mocked(sessionStore.changeAttendees).mock.calls[0]![0];
+    expect(arg.currentSubstitutes?.size ?? 0).toBe(0);
+    confirmSpy.mockRestore();
+  });
+
+  it("休憩していた人を外しても代役の欄は出ない", async () => {
+    sessionStore.session.value = sessionWithRester();
+    render(<EditAttendeesPage />);
+    await waitFor(() => expect(screen.getByTestId("edit-member-5")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("edit-member-5"));
+    expect(screen.queryByTestId("subs-card")).toBeNull();
+  });
+});
+
+describe("EditAttendeesPage — 代役が2人いるとき", () => {
+  it("手で選んだ代役は、別の人の既定値より優先される", async () => {
+    // 1-6番参加。コート: 1,2 vs 3,4。休憩: 5,6。1と2が帰る。
+    const base = makeSession();
+    sessionStore.session.value = {
+      ...base,
+      attendees: [1, 2, 3, 4, 5, 6].map((memberId, i) => ({
+        ref: { kind: "member" as const, memberId }, todayNumber: i + 1, isGuest: false,
+      })),
+      rounds: base.rounds.map((r) => ({
+        ...r,
+        resters: [{ kind: "member" as const, memberId: 5 }, { kind: "member" as const, memberId: 6 }],
+      })),
+    };
+    vi.mocked(sessionStore.suggestSubstitutes).mockReturnValue([
+      { kind: "member", memberId: 5 }, { kind: "member", memberId: 6 },
+    ]);
+    const confirmSpy = vi.spyOn(appDialog, "confirm").mockResolvedValue(true);
+    render(<EditAttendeesPage />);
+    await waitFor(() => expect(screen.getByTestId("edit-member-1")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("edit-member-1"));
+    fireEvent.click(screen.getByTestId("edit-member-2"));
+    await waitFor(() => expect(screen.getByTestId("sub-select-2")).toBeTruthy());
+    fireEvent.change(screen.getByTestId("sub-select-2"), { target: { value: "5" } });
+
+    await waitFor(() => expect((screen.getByTestId("sub-select-1") as HTMLSelectElement).value).toBe("6"));
+    fireEvent.click(screen.getByTestId("apply-attendees-btn"));
+    await waitFor(() => expect(sessionStore.changeAttendees).toHaveBeenCalled());
+    const arg = vi.mocked(sessionStore.changeAttendees).mock.calls[0]![0];
+    expect(new Map(arg.currentSubstitutes)).toEqual(new Map([[1, 6], [2, 5]]));
+    confirmSpy.mockRestore();
   });
 });
