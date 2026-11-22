@@ -1,4 +1,5 @@
 import { signal, type Signal } from "@preact/signals";
+import { clubId as defaultClubId } from "@/data/club";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SessionRepository, SessionRow } from "@/data/session-repository";
 
@@ -22,6 +23,7 @@ export interface LiveSessionStore {
 export function createLiveSessionStore(
   supabase: SupabaseClient,
   sessionRepo: SessionRepository,
+  clubId: () => number = defaultClubId,
 ): LiveSessionStore {
   const current = signal<SessionRow | null>(null);
 
@@ -38,7 +40,7 @@ export function createLiveSessionStore(
       .channel("public:sessions:ongoing")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "sessions" },
+        { event: "*", schema: "public", table: "sessions", filter: `club_id=eq.${clubId()}` },
         () => {
           // Cheap re-fetch on any change. The session table sees at most a few
           // writes per minute during play; a single round-trip is fine.

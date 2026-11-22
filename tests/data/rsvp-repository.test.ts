@@ -49,6 +49,7 @@ describe("RsvpRepository", () => {
       p_member_id: 42,
       p_status: "going",
       p_note: null,
+      p_club: 1,
     });
   });
 

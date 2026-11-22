@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 
 export type RsvpStatus = "going" | "not_going" | "maybe";
 
@@ -33,7 +34,10 @@ export interface RsvpRepository {
   publicUpsertWithToken(row: Omit<RsvpRow, "updated_at" | "updated_by">): Promise<void>;
 }
 
-export function createRsvpRepository(supabase: SupabaseClient): RsvpRepository {
+export function createRsvpRepository(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): RsvpRepository {
   const t = () => supabase.from("rsvps");
   return {
     async listForSession(plannedSessionId) {
@@ -50,6 +54,7 @@ export function createRsvpRepository(supabase: SupabaseClient): RsvpRepository {
         p_member_id: row.member_id,
         p_status: row.status,
         p_note: row.note,
+        p_club: clubId(),
       });
       if (error) throw error;
     },

@@ -330,3 +330,19 @@ describe("RoundPage — まとめて作成ボタンと今日の順位", () => {
     expect(firstTwo.every((txt) => txt!.includes("🥇"))).toBe(true);
   });
 });
+
+describe("RoundPage — GG 以外のクラブ", () => {
+  it("見出しにクラブ名が出て、LINE 再送ボタンは出ない", async () => {
+    const { currentClub, GG_CLUB } = await import("@/data/club");
+    currentClub.value = { id: 2, slug: "hampstead", name: "Hampstead Social", locale: "en", lineEnabled: false };
+    try {
+      sessionStore.session.value = makeSession(makeRound());
+      const { container, queryByTestId } = render(<RoundPage />);
+      expect(container.textContent).toContain("Hampstead Social");
+      expect(queryByTestId("line-resend-btn")).toBeNull();
+      expect(queryByTestId("standings-toggle")).toBeTruthy();
+    } finally {
+      currentClub.value = GG_CLUB;
+    }
+  });
+});

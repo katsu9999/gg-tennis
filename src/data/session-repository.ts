@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 
 /**
  * Wire shape of the `sessions` table row.
@@ -27,6 +28,8 @@ export interface SessionRow {
   host_label?: string | null;
   /** v1.6: shuffle rules snapshot (jsonb). Absent on pre-v1.6 rows. */
   shuffle_config?: unknown;
+  /** 0012〜。書き込み時はリポジトリが必ず今のクラブで上書きする。 */
+  club_id?: number;
 }
 
 export interface SessionRepository {
@@ -47,14 +50,17 @@ export interface SessionRepository {
   deleteOngoing(id: string): Promise<void>;
 }
 
-export function createSessionRepository(supabase: SupabaseClient): SessionRepository {
+export function createSessionRepository(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): SessionRepository {
   const t = () => supabase.from("sessions");
   return {
     async loadOngoing() {
       // Multiple ongoing rows can exist when a stale session is left un-ended
       // and a new one starts. .maybeSingle() throws on >1 rows, which bricks
       // both home and resume — adopt the most recently written row instead.
-      const { data, error } = await t().select("*").eq("status", "ongoing");
+      const { data, error } = await t().select("*").eq("club_id", clubId()).eq("status", "ongoing");
       if (error) throw error;
       const rows = (data ?? []) as SessionRow[];
       if (rows.length === 0) return null;
@@ -62,28 +68,29 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
       return rows[0]!;
     },
     async loadPast() {
-      const { data, error } = await t().select("*").eq("status", "past").order("date");
+      const { data, error } = await t().select("*").eq("club_id", clubId()).eq("status", "past").order("date");
       if (error) throw error;
       return (data ?? []) as SessionRow[];
     },
     async loadById(id) {
-      const { data, error } = await t().select("*").eq("id", id).maybeSingle();
+      const { data, error } = await t().select("*").eq("club_id", clubId()).eq("id", id).maybeSingle();
       if (error) throw error;
       return (data as SessionRow | null) ?? null;
     },
     async upsert(row) {
-      const { error } = await t().upsert(row);
+      const { error } = await t().upsert({ ...row, club_id: clubId() });
       if (error) throw error;
     },
     async update(row) {
       const { id, ...rest } = row;
-      const { error } = await t().update(rest).eq("id", id);
+      const { error } = await t().update({ ...rest, club_id: clubId() }).eq("id", id).eq("club_id", clubId());
       if (error) throw error;
     },
     async deleteOngoing(id) {
       const { data, error } = await t()
         .delete()
         .eq("id", id)
+        .eq("club_id", clubId())
         .eq("status", "ongoing")
         .select("id");
       if (error) throw error;
@@ -97,6 +104,7 @@ export function createSessionRepository(supabase: SupabaseClient): SessionReposi
       const { error } = await supabase.rpc("delete_session", {
         p_pin: pin,
         p_session_id: id,
+        p_club: clubId(),
       });
       if (error) throw error;
     },

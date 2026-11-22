@@ -22,7 +22,7 @@ describe("pin store", () => {
     expect(ok).toBe(true);
     expect(store.isUnlocked.value).toBe(true);
     expect(store.getPin()).toBe("1234");
-    expect(client.rpc).toHaveBeenCalledWith("verify_club_pin", { pin_input: "1234" });
+    expect(client.rpc).toHaveBeenCalledWith("verify_club_pin", { pin_input: "1234", p_club: 1 });
   });
 
   it("verify(wrong) leaves store locked", async () => {
@@ -64,6 +64,7 @@ describe("pin store", () => {
     expect(client.rpc).toHaveBeenCalledWith("set_club_pin", {
       p_pin: "1234",
       p_new_pin: "567890",
+      p_club: 1,
     });
     expect(store.isUnlocked.value).toBe(true);
     expect(store.getPin()).toBe("567890");

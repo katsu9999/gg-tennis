@@ -26,6 +26,7 @@ describe("VenueRepository", () => {
       p_pin: "test-pin",
       p_id: null,
       p_name: "West Ham Park",
+      p_club: 1,
     });
   });
 

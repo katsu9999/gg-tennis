@@ -51,6 +51,7 @@ describe("PlannedSessionRepository", () => {
     expect(c.rpc).toHaveBeenCalledWith("rotate_public_rsvp_token", {
       p_pin: "test-pin",
       p_id: "ps-uuid-1",
+      p_club: 1,
     });
   });
 
@@ -61,6 +62,7 @@ describe("PlannedSessionRepository", () => {
     expect(c.rpc).toHaveBeenCalledWith("delete_planned_session", {
       p_pin: "test-pin",
       p_id: "ps-uuid-1",
+      p_club: 1,
     });
   });
 });

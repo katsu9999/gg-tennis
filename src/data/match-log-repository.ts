@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 import type { MatchResult } from "@/engine/models";
 
 export interface MatchLogRepository {
@@ -32,11 +33,18 @@ interface MatchLogRow {
   played_at: string;
 }
 
-export function createMatchLogRepository(supabase: SupabaseClient): MatchLogRepository {
+export function createMatchLogRepository(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): MatchLogRepository {
   const t = () => supabase.from("match_log");
   return {
     async list() {
-      const { data, error } = await t().select("*").order("played_at");
+      // match_log にはクラブ列が無い。親のセッションのクラブで絞る（inner join）。
+      const { data, error } = await t()
+        .select("*, sessions!inner(club_id)")
+        .eq("sessions.club_id", clubId())
+        .order("played_at");
       if (error) throw error;
       return ((data ?? []) as MatchLogRow[]).map(r => ({
         sessionId: r.session_id,
@@ -76,6 +84,7 @@ export function createMatchLogRepository(supabase: SupabaseClient): MatchLogRepo
         p_court_type: args.courtType,
         p_winner: args.winner,
         p_rounds: args.rounds,
+        p_club: clubId(),
       });
       if (error) throw error;
     },

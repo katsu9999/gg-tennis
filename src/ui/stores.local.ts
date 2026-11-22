@@ -50,3 +50,17 @@ export const sessionStore = createSessionStore({ sessionRepo, historyRepo, match
 export const plannedSessionStore = createStubPlannedSessionStore();
 export const rsvpStore = createStubRsvpStore();
 export const rankingStore = createStubRankingStore();
+
+// 端末完結版にはクラブが無い（stores.ts と同じ名前だけ用意する）。
+import type { Club } from "@/data/club";
+export async function loadClub(slug: string): Promise<Club | null> {
+  void slug;
+  return null;
+}
+export async function listAllClubs(): Promise<Club[]> {
+  return [];
+}
+export async function createNewClub(input: unknown): Promise<number> {
+  void input;
+  throw new Error("clubs are not available in the local flavour");
+}

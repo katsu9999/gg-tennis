@@ -17,6 +17,7 @@ import { createMatchLogRepository } from "@/data/match-log-repository";
 import { createSessionRepository } from "@/data/session-repository";
 import { createPlannedSessionRepository } from "@/data/planned-session-repository";
 import { createRsvpRepository } from "@/data/rsvp-repository";
+import { createClub, listClubs, loadClubBySlug } from "@/data/club";
 
 import { createHostStore } from "@/state/host-store";
 import { createPinStore } from "@/state/pin-store";
@@ -45,3 +46,15 @@ export const sessionStore = createSessionStore({ sessionRepo, historyRepo, match
 export const plannedSessionStore = createPlannedSessionStore(plannedSessionRepo);
 export const rsvpStore = createRsvpStore(rsvpRepo);
 export const rankingStore = createRankingStore({ matchLogRepo, sessionRepo });
+
+// 複数クラブ（2026-11-22）。main.tsx の起動処理とクラブ管理画面が使う。
+// stores.local.ts にも同名の no-op がある（端末完結版にはクラブが無い）。
+export function loadClub(slug: string) {
+  return loadClubBySlug(supabase, slug);
+}
+export function listAllClubs() {
+  return listClubs(supabase);
+}
+export function createNewClub(input: Parameters<typeof createClub>[1]) {
+  return createClub(supabase, input);
+}

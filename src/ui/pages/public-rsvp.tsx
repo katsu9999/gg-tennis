@@ -1,10 +1,12 @@
 import { signal } from "@preact/signals";
+import { currentClub, isGgClub } from "@/data/club";
 import { useEffect } from "preact/hooks";
 import { plannedSessionRepo, rsvpRepo, memberRepo } from "@/ui/stores";
 import { linkTo } from "@/ui/router";
 import type { PlannedSessionRow } from "@/data/planned-session-repository";
 import type { RsvpPublicRow, RsvpStatus } from "@/data/rsvp-repository";
 import type { Member } from "@/engine/models";
+import { t } from "@/ui/i18n";
 
 const loading = signal(true);
 const notFound = signal(false);
@@ -120,7 +122,7 @@ export function PublicRsvpPage({ token }: Props) {
   if (loading.value) {
     return (
       <main style={{ maxWidth: 600, margin: "60px auto", padding: 20 }}>
-        <p class="muted">読み込み中…</p>
+        <p class="muted">{t.rsvp.loading}</p>
       </main>
     );
   }
@@ -128,8 +130,8 @@ export function PublicRsvpPage({ token }: Props) {
   if (notFound.value || !session.value) {
     return (
       <main style={{ maxWidth: 600, margin: "60px auto", padding: 20 }}>
-        <h2>このリンクは無効です</h2>
-        <p class="muted">主催者にお問い合わせください。</p>
+        <h2>{t.rsvp.invalidTitle}</h2>
+        <p class="muted">{t.rsvp.invalidBody}</p>
       </main>
     );
   }
@@ -146,8 +148,8 @@ export function PublicRsvpPage({ token }: Props) {
   return (
     <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-        <strong style={{ fontSize: 28 }}>GG</strong>
-        <span class="muted">出欠回答</span>
+        <strong style={{ fontSize: 28 }}>{isGgClub() ? "GG" : currentClub.value.name}</strong>
+        <span class="muted">{t.rsvp.headerLabel}</span>
       </header>
 
       <section class="card" style={{ marginBottom: 16 }}>
@@ -155,30 +157,30 @@ export function PublicRsvpPage({ token }: Props) {
           {s.date} @ {s.location}
         </h2>
         <p class="muted" style={{ margin: "8px 0 0", fontSize: 14 }}>
-          コート {s.court_count} 面 · {s.allow_singles ? "シングルス許可" : "ダブルスのみ"}
+          {t.rsvp.courtsInfo(s.court_count, s.allow_singles)}
         </p>
       </section>
 
       <section class="card" style={{ marginBottom: 16 }}>
         {s.show_going_list_on_public ? (
           <p style={{ margin: 0 }} data-testid="going-list">
-            ✅ <strong>行く ({goingNames.length})</strong>:{" "}
-            {goingNames.length === 0 ? <span class="muted">まだいません</span> : goingNames.join(", ")}
+            ✅ <strong>{t.rsvp.goingCount(goingNames.length)}</strong>:{" "}
+            {goingNames.length === 0 ? <span class="muted">{t.rsvp.nobodyYet}</span> : goingNames.join(", ")}
           </p>
         ) : (
           <p style={{ margin: 0 }} data-testid="going-count">
-            ✅ 行く: {goingRsvps.length}人
+            {t.rsvp.goingTotal(goingRsvps.length)}
           </p>
         )}
         <p class="muted" style={{ margin: "6px 0 0", fontSize: 14 }}>
-          ❓ 未定 {maybeCount}人 · ❌ 行かない {notGoingCount}人
+          {t.rsvp.othersCount(maybeCount, notGoingCount)}
         </p>
       </section>
 
       <section class="card">
-        <h3 style={{ marginTop: 0, fontSize: 15 }}>あなたの回答</h3>
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.rsvp.yourAnswer}</h3>
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>名簿から選ぶ</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{t.rsvp.pickMember}</div>
           <select
             data-testid="rsvp-member-select"
             value={selectedMemberId.value === "" ? "" : String(selectedMemberId.value)}
@@ -188,7 +190,7 @@ export function PublicRsvpPage({ token }: Props) {
             }}
             style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "2px solid var(--line)" }}
           >
-            <option value="">— 選択してください —</option>
+            <option value="">{t.rsvp.pickPlaceholder}</option>
             {activeMembers.value.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
@@ -196,11 +198,11 @@ export function PublicRsvpPage({ token }: Props) {
         </label>
 
         <label style={{ display: "block", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>メモ（任意）</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{t.rsvp.note}</div>
           <textarea
             data-testid="rsvp-note"
             value={note.value}
-            placeholder="30分遅れる など"
+            placeholder={t.rsvp.notePlaceholder}
             onInput={(e) => { note.value = (e.currentTarget as HTMLTextAreaElement).value; }}
             rows={2}
             style={{ width: "100%", padding: 8, fontSize: 14, borderRadius: 8, border: "2px solid var(--line)", resize: "vertical" }}
@@ -218,14 +220,14 @@ export function PublicRsvpPage({ token }: Props) {
               onClick={() => { void submit(s); }}
               style={{ flex: 1 }}
             >
-              {s === "going" ? "行く" : s === "maybe" ? "未定" : "行かない"}
+              {s === "going" ? t.rsvp.going : s === "maybe" ? t.rsvp.maybe : t.rsvp.notGoing}
             </button>
           ))}
         </div>
 
         {justSubmitted.value && (
           <p data-testid="rsvp-confirmation" style={{ marginTop: 12, color: "var(--green)" }}>
-            送信しました — このブラウザから回答を変更できます。
+            {t.rsvp.submitted}
           </p>
         )}
         {error.value && (
@@ -236,7 +238,7 @@ export function PublicRsvpPage({ token }: Props) {
       </section>
 
       <footer style={{ marginTop: 24 }} class="muted">
-        <small><a href={linkTo("/privacy")}>プライバシー</a> · クラブ内輪共有のみ。SNSへの転載はご遠慮ください。</small>
+        <small><a href={linkTo("/privacy")}>{t.rsvp.privacy}</a>{t.rsvp.footer}</small>
       </footer>
     </main>
   );

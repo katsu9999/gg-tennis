@@ -39,6 +39,7 @@ describe("MatchLogRepository", () => {
       p_court_type: "doubles",
       p_winner: "B",
       p_rounds: rounds,
+      p_club: 1,
     });
   });
 

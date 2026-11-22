@@ -6,9 +6,35 @@ import { FLAVOR, type Flavor } from "@/flavor";
 // When BASE_URL is "/" (default), stripBase is a no-op.
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, ""); // e.g. "/gg-tennis-shuffle" or ""
 
-export function stripBase(path: string): string {
+/** Base だけを外す（クラブの接頭辞は残る）。 */
+function stripBaseOnly(path: string): string {
   if (BASE && path.startsWith(BASE)) return path.slice(BASE.length) || "/";
   return path;
+}
+
+// 複数クラブ（2026-11-22）: GG 以外のクラブは /c/<slug>/... で開く。GG は今までどおり
+// 接頭辞なし（/c/gg/... も GG として受ける）。画面のルーティングは接頭辞を外した
+// パスで行い、navigate / linkTo は今のクラブの接頭辞を付け直す。
+const CLUB_PREFIX = /^\/c\/([a-z0-9][a-z0-9-]{1,29})(?=\/|$)/;
+
+/** パス（Base 抜き）からクラブの slug を取り出す。無ければ null。 */
+export function clubSlugFromPath(path: string): string | null {
+  const m = CLUB_PREFIX.exec(stripBaseOnly(path));
+  return m ? m[1]! : null;
+}
+
+let clubPrefix = "";
+
+/** 起動時に1回だけ呼ぶ。GG（または null）なら接頭辞なし。 */
+export function setClubPrefix(slug: string | null): void {
+  clubPrefix = slug && slug !== "gg" ? `/c/${slug}` : "";
+}
+
+export function stripBase(path: string): string {
+  const p = stripBaseOnly(path);
+  const m = CLUB_PREFIX.exec(p);
+  if (m) return p.slice(m[0].length) || "/";
+  return p;
 }
 
 export type Route =
@@ -24,6 +50,7 @@ export type Route =
   | { name: "ranking" }
   | { name: "settings" }
   | { name: "privacy" }
+  | { name: "clubs" }
   | { name: "public-rsvp"; params: { token: string } };
 
 const PUBLIC_RSVP_PATTERN = /^\/rsvp\/([A-Za-z0-9_-]+)$/;
@@ -31,6 +58,7 @@ const PUBLIC_RSVP_PATTERN = /^\/rsvp\/([A-Za-z0-9_-]+)$/;
 // Server-only pages: planned sessions / public RSVP need a shared DB, the
 // ranking page needs the match log — all absent in the device-local flavour.
 const LOCAL_EXCLUDED: ReadonlySet<Route["name"]> = new Set([
+  "clubs",
   "planned-sessions",
   "public-rsvp",
   "ranking",
@@ -60,6 +88,7 @@ function matchAnyFlavor(path: string): Route {
   if (path === "/ranking") return { name: "ranking" };
   if (path === "/settings") return { name: "settings" };
   if (path === "/privacy") return { name: "privacy" };
+  if (path === "/clubs") return { name: "clubs" };
   const m = PUBLIC_RSVP_PATTERN.exec(path);
   if (m) return { name: "public-rsvp", params: { token: m[1]! } };
   return { name: "home" };
@@ -70,7 +99,7 @@ export const currentPath = signal(
 );
 
 export function navigate(to: string): void {
-  const full = BASE + (to.startsWith("/") ? to : "/" + to);
+  const full = BASE + clubPrefix + (to.startsWith("/") ? to : "/" + to);
   if (typeof history !== "undefined") {
     history.pushState(null, "", full);
   }
@@ -80,7 +109,14 @@ export function navigate(to: string): void {
 /** Build a base-aware href for `<a>` tags. Without this, `<a href="/">` jumps
  *  out of the app on GitHub Pages (where BASE = "/gg-tennis"). */
 export function linkTo(to: string): string {
-  return BASE + (to.startsWith("/") ? to : "/" + to);
+  return BASE + clubPrefix + (to.startsWith("/") ? to : "/" + to);
+}
+
+/** 共有用の絶対 URL（公開 RSVP リンク・クラブのリンク）。 */
+export function absoluteLinkTo(to: string, slug?: string): string {
+  const prefix = slug === undefined ? clubPrefix : slug === "gg" ? "" : `/c/${slug}`;
+  const origin = typeof location !== "undefined" ? location.origin : "";
+  return origin + BASE + prefix + (to.startsWith("/") ? to : "/" + to);
 }
 
 if (typeof window !== "undefined") {

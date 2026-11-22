@@ -241,4 +241,19 @@ describe("NewSessionPage", () => {
     const banner = getByTestId("planned-banner");
     expect(banner.textContent).toMatch(/予定から/);
   });
+
+  it("?from= の予定が読めない（別クラブ・削除済み）ときは、出欠の会員を取り込まない", async () => {
+    hoisted.plannedSessionLoadByIdMock.mockResolvedValue(null);
+    hoisted.rsvpLoadForSessionMock.mockResolvedValue([
+      { planned_session_id: "pX", member_id: 1, status: "going", note: null,
+        updated_at: "2025-07-01T00:00:00Z", updated_by: "admin" as const, self_token: null },
+    ]);
+    hoisted.getFromParamMock.mockReturnValue("pX");
+
+    const { getByTestId, queryByTestId } = render(<NewSessionPage />);
+    await waitFor(() => expect(hoisted.plannedSessionLoadByIdMock).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(getByTestId("member-1").getAttribute("style")).not.toContain("background: var(--ink)");
+    expect(queryByTestId("planned-banner")).toBeNull();
+  });
 });

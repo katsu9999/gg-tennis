@@ -1,4 +1,6 @@
 import { signal, type Signal } from "@preact/signals";
+import { t } from "@/ui/i18n";
+import { clubId as defaultClubId } from "@/data/club";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -34,7 +36,10 @@ export interface PinStore {
   setClubPin(newPin: string): Promise<void>;
 }
 
-export function createPinStore(supabase: SupabaseClient): PinStore {
+export function createPinStore(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): PinStore {
   const isUnlocked = signal(false);
   const verifying = signal(false);
   const lastError = signal<string | null>(null);
@@ -54,10 +59,11 @@ export function createPinStore(supabase: SupabaseClient): PinStore {
       try {
         const { data, error } = await supabase.rpc("verify_club_pin", {
           pin_input: pin,
+          p_club: clubId(),
         });
         if (error) {
           console.error("verify_club_pin RPC failed:", error);
-          lastError.value = `サーバーエラー: ${error.message ?? "不明"} (migrations 0004-0006 が未適用かも)`;
+          lastError.value = t.errors.pinServer(error.message ?? t.errors.unknown);
           return false;
         }
         const ok = data === true;
@@ -68,7 +74,7 @@ export function createPinStore(supabase: SupabaseClient): PinStore {
         return ok;
       } catch (e) {
         console.error("verify_club_pin threw:", e);
-        lastError.value = `通信エラー: ${e instanceof Error ? e.message : String(e)}`;
+        lastError.value = t.errors.pinNetwork(e instanceof Error ? e.message : String(e));
         return false;
       } finally {
         verifying.value = false;
@@ -82,10 +88,11 @@ export function createPinStore(supabase: SupabaseClient): PinStore {
       isUnlocked.value = false;
     },
     async setClubPin(newPin) {
-      if (!cachedPin) throw new Error("PIN がロックされています");
+      if (!cachedPin) throw new Error(t.errors.pinLocked);
       const { error } = await supabase.rpc("set_club_pin", {
         p_pin: cachedPin,
         p_new_pin: newPin,
+        p_club: clubId(),
       });
       if (error) throw new Error(error.message);
       cachedPin = newPin;

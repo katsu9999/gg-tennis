@@ -1,4 +1,5 @@
 import type { AttendeeRef, Gender, Round, SameSessionStats } from "./models";
+import { t } from "@/ui/i18n";
 import { pairKey } from "./models";
 
 // 代役（途中で1人抜けたとき、その人の枠に別の人を入れる）。
@@ -41,9 +42,9 @@ export function substituteInRound(
   incoming: AttendeeRef,
   outTo: "resters" | "none",
 ): Round {
-  if (sameRef(out, incoming)) throw new Error("同じ人どうしは入れ替えられません。");
-  if (!findOnCourt(round, out)) throw new Error("入れ替える人がこのラウンドのコートにいません。");
-  if (findOnCourt(round, incoming)) throw new Error("代わりに入る人は既にコートに出ています。");
+  if (sameRef(out, incoming)) throw new Error(t.errors.sameSwap);
+  if (!findOnCourt(round, out)) throw new Error(t.errors.outNotOnCourt);
+  if (findOnCourt(round, incoming)) throw new Error(t.errors.inAlreadyOnCourt);
 
   const swap = (team: AttendeeRef[]): AttendeeRef[] =>
     team.map((r) => (sameRef(r, out) ? incoming : r));

@@ -97,9 +97,10 @@ export async function exportMemberData(memberId: number): Promise<void> {
   // which throws without VITE_SUPABASE_* env — the local (device-only)
   // flavour bundles this page module but must never execute this path.
   const { supabase } = await import("./supabase-client");
+  const { clubId } = await import("./club");
   const [memberRes, sessionsRes, matchesRes, rsvpsRes] = await Promise.all([
-    supabase.from("members").select("*").eq("id", memberId).single(),
-    supabase.from("sessions").select("id,date,location,attendees").eq("status", "past"),
+    supabase.from("members").select("*").eq("club_id", clubId()).eq("id", memberId).single(),
+    supabase.from("sessions").select("id,date,location,attendees").eq("club_id", clubId()).eq("status", "past"),
     supabase.from("match_log").select("*"),
     // self_token is not anon-readable (migration 0008) — select("*") would
     // fail with permission-denied, and the token has no place in an export.

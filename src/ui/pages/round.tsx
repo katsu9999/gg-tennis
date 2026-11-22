@@ -1,10 +1,11 @@
 import { signal } from "@preact/signals";
+import { currentClub, isGgClub } from "@/data/club";
 import { useEffect } from "preact/hooks";
 import type { AttendeeRef } from "@/engine/models";
 import { CourtView } from "@/ui/components/court-view";
 import { sessionStore, rosterStore } from "@/ui/stores";
 import { sessionHasResults } from "@/state/session-store";
-import { offerAllRoundsNotify, offerLineNotify, offerSessionSummary, buildSummaryPayload } from "@/ui/line-notify";
+import { offerAllRoundsNotify, offerLineNotify, offerSessionSummary, buildSummaryPayload, lineAvailable } from "@/ui/line-notify";
 import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
@@ -132,7 +133,7 @@ export function RoundPage() {
         }}
       >
         <strong style={{ fontSize: 18 }}>
-          {BRAND} <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
+          {isGgClub() ? BRAND : currentClub.value.name} <span style={{ color: "var(--muted)", fontSize: 14 }}>· R{s.currentRoundIndex + 1} / {s.rounds.length}</span>
         </strong>
         <label style={{ fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
           <input
@@ -287,7 +288,7 @@ export function RoundPage() {
         </button>
       )}
 
-      {!IS_LOCAL && (
+      {lineAvailable() && (
         <button
           type="button"
           data-testid="line-resend-btn"
