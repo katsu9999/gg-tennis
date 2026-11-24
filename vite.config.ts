@@ -13,8 +13,9 @@ const isLocalFlavor = process.env.VITE_FLAVOR === "local";
 // クラブ専用の公開（VITE_FIXED_CLUB、例: ravens）では、ホーム画面のアプリ名と
 // タブの題名をそのクラブのものにする（VITE_APP_NAME / VITE_APP_SHORT_NAME）。
 const fixedClub = (process.env.VITE_FIXED_CLUB ?? "").trim();
-const appName = process.env.VITE_APP_NAME?.trim() || "GG — Tennis Court Shuffle";
-const appShortName = process.env.VITE_APP_SHORT_NAME?.trim() || "GG";
+const fixedLabel = fixedClub ? fixedClub.charAt(0).toUpperCase() + fixedClub.slice(1) : "";
+const appName = process.env.VITE_APP_NAME?.trim() || (fixedClub ? `${fixedLabel} — Court Shuffle` : "GG — Tennis Court Shuffle");
+const appShortName = process.env.VITE_APP_SHORT_NAME?.trim() || (fixedClub ? fixedLabel : "GG");
 const appLang = fixedClub ? "en" : "ja";
 
 const escapeHtml = (v: string): string =>
@@ -61,7 +62,9 @@ const pwaPlugin: PluginOption[] = isLocalFlavor
               urlPattern: ({ url }) => /\.supabase\.co\/rest\//.test(url.href),
               handler: "NetworkFirst",
               options: {
-                cacheName: "supabase-api",
+                // 同じ github.io 上の GG と Ravens は Cache Storage を共有するので名前を分ける
+                // （上限 60 件で互いを追い出さないように）。GG は従来の名前のまま。
+                cacheName: fixedClub ? `supabase-api-${fixedClub}` : "supabase-api",
                 networkTimeoutSeconds: 4,
                 expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
               },

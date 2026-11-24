@@ -35,6 +35,8 @@ vi.mock("@/flavor", () => ({
   FLAVOR: "local",
   IS_LOCAL: true,
   BRAND: "Court Shuffle",
+  FIXED_CLUB: null,
+  deviceKey: (k: string) => k,
 }));
 vi.mock("@/ui/stores", () => import("@/ui/stores.local"));
 // Drive the pages with the EN table, exactly as VITE_LOCALE=en builds do —

@@ -93,3 +93,11 @@ describe("router in a fixed-club build", () => {
     expect(r.clubSlugFromPath("/")).toBeNull();
   });
 });
+
+describe("deviceKey", () => {
+  it("keeps GG keys unchanged and scopes club-only builds", async () => {
+    const { deviceKey } = await import("@/flavor");
+    expect(deviceKey("cs_shuffle_rules", null)).toBe("cs_shuffle_rules");
+    expect(deviceKey("cs_shuffle_rules", "ravens")).toBe("cs_shuffle_rules.ravens");
+  });
+});
