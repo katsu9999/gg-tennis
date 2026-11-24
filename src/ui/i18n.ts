@@ -419,8 +419,9 @@ export const ja = {
       {
         title: "4. 遅れて来る人・途中で帰る人",
         items: [
-          "ラウンド画面の「👥 メンバーの追加・離脱」で、チェックを付け外しします。",
-          "帰る人がいると、次のラウンドからお休みの人がその枠に入ります。ほかの組み合わせは変わりません。試合の途中で抜けた場合は代わりに入った人を選ぶと、勝ち負けはその人に付きます。",
+          "最新のラウンドを表示したまま、ラウンド画面の「👥 メンバーの追加・離脱」でチェックを付け外しします。「前」で戻ったまま変えると、その後のラウンドの記録が消えることがあります。",
+          "帰る人がいると、次のラウンドからはお休みの人がその枠に入り、ほかの組み合わせはできるだけそのままにします。お休みの人が足りないときは、残りのラウンドを組み直します。",
+          "今のラウンドに出ている人が帰るときは、「代わりに入った人」を選ぶ欄が出ます。勝ち負けはその人に付きます。その試合を最後までやってから帰るなら「代わりなし（このラウンドは最後まで出た）」を選んでください。",
           "来た人がいると、まだやっていないラウンドを組み直してその人を入れます。",
         ],
       },
@@ -871,8 +872,9 @@ export const en: Strings = {
       {
         title: "4. Late arrivals and early leavers",
         items: [
-          "On the round screen, tap \"👥 Players joining / leaving\" and tick or untick players.",
-          "If someone leaves, a resting player takes their place from the next round and every other pairing stays the same. If they leave mid-game, pick who took over so the result goes to that person.",
+          "While showing the latest round, tap \"👥 Players joining / leaving\" and tick or untick players. If you change players after going back with \"Prev\", results from later rounds may be lost.",
+          "If someone leaves, a resting player takes their place from the next round and the other pairings stay as they are where possible. If there aren't enough resting players, the remaining rounds are rebuilt.",
+          "If the person leaving is on court in the current round, you'll be asked who took over; the result goes to that person. If they finished the game before leaving, choose \"Nobody (they finished this round)\".",
           "If someone joins, the rounds not yet played are rebuilt to include them.",
         ],
       },
