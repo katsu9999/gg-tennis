@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { deviceKey } from "@/flavor";
 import { isGgClub } from "@/data/club";
 import { useEffect } from "preact/hooks";
 import type { Gender } from "@/engine/models";
@@ -42,7 +43,7 @@ const error = signal<string | null>(null);
 const plannedSessionId = signal<string | null>(null);
 
 /** Shuffle rules — remembered across sessions on this device. */
-const RULES_STORAGE_KEY = "cs_shuffle_rules";
+const RULES_STORAGE_KEY = deviceKey("cs_shuffle_rules");
 
 function loadStoredRules(): ShuffleConfig {
   try {

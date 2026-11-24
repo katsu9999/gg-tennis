@@ -16,3 +16,21 @@ export const IS_LOCAL = FLAVOR === "local";
 
 /** Short brand mark shown in page headers. */
 export const BRAND = IS_LOCAL ? "Court Shuffle" : "GG";
+
+/**
+ * クラブ専用の公開（2026-11-24）。VITE_FIXED_CLUB=ravens でビルドすると、その
+ * クラブだけを開くアプリになる（例: katsu9999.github.io/ravens/）。URL に /c/<slug>
+ * は付かず、別クラブ（GG を含む）への切り替えもしない。未指定なら通常の GG 公開。
+ */
+export function parseFixedClub(raw: string | undefined): string | null {
+  const v = (raw ?? "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]{1,29}$/.test(v) && v !== "gg" ? v : null;
+}
+
+export const FIXED_CLUB: string | null = IS_LOCAL ? null : parseFixedClub(import.meta.env.VITE_FIXED_CLUB);
+
+/** 端末に保存する設定のキー。クラブ専用の公開では、同じ github.io 上の GG アプリと
+ *  混ざらないようにクラブ名を付ける（運営者名・シャッフル設定など）。 */
+export function deviceKey(key: string, fixed: string | null = FIXED_CLUB): string {
+  return fixed ? `${key}.${fixed}` : key;
+}

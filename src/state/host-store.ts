@@ -1,4 +1,5 @@
 import { signal, type Signal } from "@preact/signals";
+import { deviceKey } from "@/flavor";
 
 /**
  * Tracks the "host of the day" using a LocalStorage-issued token.
@@ -13,7 +14,8 @@ import { signal, type Signal } from "@preact/signals";
  */
 
 const TOKEN_KEY = "gg_host_token";
-const LABEL_KEY = "gg_host_label";
+// 運営者名はクラブ専用の公開ごとに別（端末の識別トークンは共通のまま）。
+const LABEL_KEY = deviceKey("gg_host_label");
 
 export interface HostStore {
   token: Signal<string>;
