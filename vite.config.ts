@@ -10,6 +10,24 @@ import path from "node:path";
 // service worker means no stale-cache class of bugs.
 const isLocalFlavor = process.env.VITE_FLAVOR === "local";
 
+// クラブ専用の公開（VITE_FIXED_CLUB、例: ravens）では、ホーム画面のアプリ名と
+// タブの題名をそのクラブのものにする（VITE_APP_NAME / VITE_APP_SHORT_NAME）。
+const fixedClub = (process.env.VITE_FIXED_CLUB ?? "").trim();
+const appName = process.env.VITE_APP_NAME?.trim() || "GG — Tennis Court Shuffle";
+const appShortName = process.env.VITE_APP_SHORT_NAME?.trim() || "GG";
+const appLang = fixedClub ? "en" : "ja";
+
+const escapeHtml = (v: string): string =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const htmlBrand: PluginOption = {
+  name: "club-html-brand",
+  transformIndexHtml: (html) =>
+    html
+      .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(appName)}</title>`)
+      .replace('<html lang="ja">', `<html lang="${appLang}">`),
+};
+
 const pwaPlugin: PluginOption[] = isLocalFlavor
   ? []
   : [
@@ -17,9 +35,10 @@ const pwaPlugin: PluginOption[] = isLocalFlavor
         registerType: "autoUpdate",
         includeAssets: ["icons/*"],
         manifest: {
-          name: "GG — Tennis Court Shuffle",
-          short_name: "GG",
-          description: "テニスクラブの公平なコート割り振り",
+          name: appName,
+          short_name: appShortName,
+          description: fixedClub ? "Fair court rotation for tennis clubs" : "テニスクラブの公平なコート割り振り",
+          lang: appLang,
           theme_color: "#0b1410",
           background_color: "#eef1ea",
           display: "standalone",
@@ -29,9 +48,10 @@ const pwaPlugin: PluginOption[] = isLocalFlavor
           start_url: "./?pwa=1",
           scope: "./",
           icons: [
-            { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-            { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-            { src: "/icons/icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+            // マニフェストからの相対（Base 込み）。"/icons/…" だと github.io 直下を見てしまう。
+            { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
+            { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
+            { src: "icons/icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
           ],
         },
         workbox: {
@@ -53,7 +73,7 @@ const pwaPlugin: PluginOption[] = isLocalFlavor
 
 export default defineConfig({
   base: process.env.VITE_BASE_URL ?? "/",
-  plugins: [preact(), ...pwaPlugin],
+  plugins: [preact(), htmlBrand, ...pwaPlugin],
   resolve: {
     alias: [
       // Must come before the generic "@" alias: exact-match the composition

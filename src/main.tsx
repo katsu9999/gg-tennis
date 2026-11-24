@@ -39,7 +39,8 @@ import { PrivacyPage } from "@/ui/pages/privacy";
 import { SettingsPage } from "@/ui/pages/settings";
 import { SettingsLocalPage } from "@/ui/pages/settings-local";
 import { ClubsPage } from "@/ui/pages/clubs";
-import { IS_LOCAL } from "@/flavor";
+import { FIXED_CLUB, IS_LOCAL } from "@/flavor";
+import { decideBootClub, rememberLastClub } from "@/boot-club";
 
 const route = computed(() => matchRoute(currentPath.value));
 
@@ -104,24 +105,24 @@ const appRoot: HTMLElement = root;
 
 // 複数クラブ: URL の /c/<slug> からクラブを決めてから描画する。リポジトリは
 // currentClub を見てデータを絞るので、決まる前に何かを読み込んではいけない。
-const LAST_CLUB_KEY = "gg.lastClubSlug";
+function storageOrNull(): Storage | null {
+  try { return localStorage; } catch { return null; }
+}
 
 async function boot(): Promise<void> {
-  const slug = IS_LOCAL ? null : clubSlugFromPath(location.pathname);
-  // ホーム画面のアイコンから開くと start_url（クラブ接頭辞なし）になる。最後に
-  // 開いたクラブが GG 以外なら、そのクラブへ移る。
-  if (!IS_LOCAL) {
-    try {
-      const last = localStorage.getItem(LAST_CLUB_KEY);
-      if (!slug && new URLSearchParams(location.search).has("pwa") && last && last !== "gg") {
-        location.replace(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/c/${last}/`);
-        return;
-      }
-      if (!slug || slug === "gg") localStorage.setItem(LAST_CLUB_KEY, "gg");
-    } catch {
-      /* プライベートモード等で localStorage が使えなくても起動は続ける */
-    }
+  const decision = decideBootClub({
+    isLocal: IS_LOCAL,
+    fixed: FIXED_CLUB,
+    slug: IS_LOCAL ? null : clubSlugFromPath(location.pathname),
+    search: location.search,
+    base: import.meta.env.BASE_URL,
+    storage: storageOrNull(),
+  });
+  if (decision.kind === "redirect") {
+    location.replace(decision.to);
+    return;
   }
+  const slug = decision.slug;
   if (slug && slug !== "gg") {
     let club: Club | null = null;
     try {
@@ -135,7 +136,7 @@ async function boot(): Promise<void> {
       return;
     }
     currentClub.value = club;
-    try { localStorage.setItem(LAST_CLUB_KEY, club.slug); } catch { /* 同上 */ }
+    rememberLastClub(storageOrNull(), club.slug, FIXED_CLUB);
     setClubPrefix(club.slug);
     setLocale(club.locale);
     document.title = `${club.name} — Court Shuffle`;

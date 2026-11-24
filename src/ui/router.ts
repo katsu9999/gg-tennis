@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals";
-import { FLAVOR, type Flavor } from "@/flavor";
+import { FIXED_CLUB, FLAVOR, type Flavor } from "@/flavor";
 
 // Strip the Vite base path so route matching always works against bare paths
 // regardless of whether the app is hosted at "/" or at "/gg-tennis-shuffle/".
@@ -19,6 +19,8 @@ const CLUB_PREFIX = /^\/c\/([a-z0-9][a-z0-9-]{1,29})(?=\/|$)/;
 
 /** パス（Base 抜き）からクラブの slug を取り出す。無ければ null。 */
 export function clubSlugFromPath(path: string): string | null {
+  // クラブ専用の公開では、URL に関係なくそのクラブ（/c/gg/ でも GG は開かない）。
+  if (FIXED_CLUB) return FIXED_CLUB;
   const m = CLUB_PREFIX.exec(stripBaseOnly(path));
   return m ? m[1]! : null;
 }
@@ -27,7 +29,7 @@ let clubPrefix = "";
 
 /** 起動時に1回だけ呼ぶ。GG（または null）なら接頭辞なし。 */
 export function setClubPrefix(slug: string | null): void {
-  clubPrefix = slug && slug !== "gg" ? `/c/${slug}` : "";
+  clubPrefix = !FIXED_CLUB && slug && slug !== "gg" ? `/c/${slug}` : "";
 }
 
 export function stripBase(path: string): string {
@@ -114,7 +116,7 @@ export function linkTo(to: string): string {
 
 /** 共有用の絶対 URL（公開 RSVP リンク・クラブのリンク）。 */
 export function absoluteLinkTo(to: string, slug?: string): string {
-  const prefix = slug === undefined ? clubPrefix : slug === "gg" ? "" : `/c/${slug}`;
+  const prefix = slug === undefined || FIXED_CLUB ? clubPrefix : slug === "gg" ? "" : `/c/${slug}`;
   const origin = typeof location !== "undefined" ? location.origin : "";
   return origin + BASE + prefix + (to.startsWith("/") ? to : "/" + to);
 }
