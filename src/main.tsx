@@ -1,7 +1,11 @@
 import { render } from "preact";
+import { EntryGate } from "@/ui/components/entry-gate";
+import { entryUnlocked, initEntryLock, recheckEntry } from "@/state/entry-lock";
 import { computed } from "@preact/signals";
-import { currentPath, matchRoute } from "@/ui/router";
-import { sessionStore } from "@/ui/stores";
+import { clubSlugFromPath, currentPath, matchRoute, setClubPrefix } from "@/ui/router";
+import { checkClubPin, loadClub, sessionStore } from "@/ui/stores";
+import { currentClub, type Club } from "@/data/club";
+import { setLocale } from "@/ui/i18n";
 import "@/ui/theme.css";
 
 // Re-hydrate any ongoing session from the DB on cold start. Without this,
@@ -9,7 +13,8 @@ import "@/ui/theme.css";
 // badge (because liveSessionStore queries the DB) but sessionStore is empty
 // — so visiting /session/round renders "セッションが開始されていません" and
 // the operator loses today's match.
-void sessionStore.resume();
+// （起動時の resume はクラブが決まってから boot() で行う。先に走ると GG の
+// 未終了セッションを別クラブの画面に読み込んでしまう。）
 
 // Android hardware back button (Capacitor shell). IS_LOCAL is a build-time
 // constant, so the GG bundle drops both the branch and the chunk.
@@ -18,7 +23,7 @@ if (IS_LOCAL) {
 }
 
 // Phase 4+ pages — added incrementally
-import { AppDialogHost } from "@/ui/components/app-dialog";
+import { AppDialogHost, appDialog } from "@/ui/components/app-dialog";
 import { HomePage } from "@/ui/pages/home";
 import { NewSessionPage } from "@/ui/pages/new-session";
 import { NumberMapPage } from "@/ui/pages/number-map";
@@ -33,6 +38,7 @@ import { PastSessionsPage } from "@/ui/pages/past-sessions";
 import { PrivacyPage } from "@/ui/pages/privacy";
 import { SettingsPage } from "@/ui/pages/settings";
 import { SettingsLocalPage } from "@/ui/pages/settings-local";
+import { ClubsPage } from "@/ui/pages/clubs";
 import { IS_LOCAL } from "@/flavor";
 
 const route = computed(() => matchRoute(currentPath.value));
@@ -47,10 +53,14 @@ function ComingSoon({ name }: { name: string }) {
   );
 }
 
+// 入室 PIN が無くても開ける画面（公開の出欠リンクとプライバシー表記）。
+const OPEN_ROUTES: ReadonlySet<string> = new Set(["public-rsvp", "privacy"]);
+
 function App() {
+  const gated = !entryUnlocked.value && !OPEN_ROUTES.has(route.value.name);
   return (
     <>
-      <CurrentPage />
+      {gated ? <EntryGate /> : <CurrentPage />}
       <AppDialogHost />
     </>
   );
@@ -71,12 +81,86 @@ function CurrentPage() {
     case "ranking": return <RankingPage />;
     case "past-sessions": return <PastSessionsPage />;
     case "privacy": return <PrivacyPage />;
+    case "clubs": return <ClubsPage />;
     case "settings": return IS_LOCAL ? <SettingsLocalPage /> : <SettingsPage />;
     default:
       return <ComingSoon name={(r as { name: string }).name} />;
   }
 }
 
+function ClubNotFound({ slug, error }: { slug: string; error?: string }) {
+  return (
+    <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
+      <h2>Club not found / クラブが見つかりません</h2>
+      <p class="muted">/c/{slug}</p>
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
+    </main>
+  );
+}
+
 const root = document.getElementById("app");
 if (!root) throw new Error("#app missing");
-render(<App />, root);
+const appRoot: HTMLElement = root;
+
+// 複数クラブ: URL の /c/<slug> からクラブを決めてから描画する。リポジトリは
+// currentClub を見てデータを絞るので、決まる前に何かを読み込んではいけない。
+const LAST_CLUB_KEY = "gg.lastClubSlug";
+
+async function boot(): Promise<void> {
+  const slug = IS_LOCAL ? null : clubSlugFromPath(location.pathname);
+  // ホーム画面のアイコンから開くと start_url（クラブ接頭辞なし）になる。最後に
+  // 開いたクラブが GG 以外なら、そのクラブへ移る。
+  if (!IS_LOCAL) {
+    try {
+      const last = localStorage.getItem(LAST_CLUB_KEY);
+      if (!slug && new URLSearchParams(location.search).has("pwa") && last && last !== "gg") {
+        location.replace(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/c/${last}/`);
+        return;
+      }
+      if (!slug || slug === "gg") localStorage.setItem(LAST_CLUB_KEY, "gg");
+    } catch {
+      /* プライベートモード等で localStorage が使えなくても起動は続ける */
+    }
+  }
+  if (slug && slug !== "gg") {
+    let club: Club | null = null;
+    try {
+      club = await loadClub(slug);
+    } catch (e) {
+      render(<ClubNotFound slug={slug} error={e instanceof Error ? e.message : String(e)} />, appRoot);
+      return;
+    }
+    if (!club) {
+      render(<ClubNotFound slug={slug} />, appRoot);
+      return;
+    }
+    currentClub.value = club;
+    try { localStorage.setItem(LAST_CLUB_KEY, club.slug); } catch { /* 同上 */ }
+    setClubPrefix(club.slug);
+    setLocale(club.locale);
+    document.title = `${club.name} — Court Shuffle`;
+  }
+  // 入室 PIN は GG だけ（別クラブの幹事が GG を開けないように）。
+  const gate = !IS_LOCAL && currentClub.value.id === 1;
+  initEntryLock(currentClub.value.id, gate);
+  if (gate) void recheckEntry(currentClub.value.id, checkClubPin);
+  // 締め出し中は何も読まない。PIN を入れて開いた時点で今日のセッションを復元する。
+  entryUnlocked.subscribe((open) => { if (open) void sessionStore.resume(); });
+  render(<App />, appRoot);
+
+  // GG は起動時にクラブを読まない（オフライン起動を止めないため）。代わりに裏で
+  // 1回確かめ、DB 更新（0012）がまだなら知らせる。アプリが先に出てしまうと
+  // club_id 列が無くて名簿もセッションも読めない。
+  if (!IS_LOCAL && !slug) {
+    loadClub("gg").catch((e: unknown) => {
+      const o = e as { code?: string; message?: string };
+      if (o?.code === "42703" || /column .*(slug|club_id)/i.test(o?.message ?? "")) {
+        void appDialog.alert(
+          "DB update 0012 (clubs) has not been applied yet.\nデータベースの更新（0012）がまだ適用されていません。",
+        );
+      }
+    });
+  }
+}
+
+void boot();

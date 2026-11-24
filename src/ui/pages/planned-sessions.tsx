@@ -1,15 +1,17 @@
 import { signal } from "@preact/signals";
+import { isGgClub } from "@/data/club";
 import { useEffect } from "preact/hooks";
 import { plannedSessionStore, rsvpStore, rosterStore, pinStore } from "@/ui/stores";
 import { useRequirePin } from "@/ui/components/pin-modal";
 import { appDialog } from "@/ui/components/app-dialog";
 import { RsvpSummary } from "@/ui/components/rsvp-summary";
 import type { RsvpStatus } from "@/data/rsvp-repository";
-import { navigate, linkTo } from "@/ui/router";
+import { navigate, linkTo, absoluteLinkTo } from "@/ui/router";
+import { t } from "@/ui/i18n";
 
 function requirePin(): string {
   const pin = pinStore.getPin();
-  if (!pin) throw new Error("PIN がロックされています");
+  if (!pin) throw new Error(t.pin.locked);
   return pin;
 }
 
@@ -23,7 +25,7 @@ interface FormState {
 
 const initialForm = (): FormState => ({
   date: new Date().toISOString().slice(0, 10),
-  location: "Hendon",
+  location: isGgClub() ? "Hendon" : "",
   courtCount: 3,
   allowSingles: true,
   showGoingListOnPublic: true,
@@ -98,7 +100,8 @@ async function copyPublicLink(sessionId: string, existingToken: string | null): 
   error.value = null;
   try {
     const token = existingToken ?? (await plannedSessionStore.rotateToken(sessionId, requirePin()));
-    const url = `${window.location.origin}/rsvp/${token}`;
+    // Base（/gg-tennis）とクラブの接頭辞込み。以前は origin 直下で開けなかった。
+    const url = absoluteLinkTo(`/rsvp/${token}`);
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
     }
@@ -126,7 +129,7 @@ async function rotateLink(sessionId: string): Promise<void> {
 }
 
 async function deletePlanned(id: string): Promise<void> {
-  if (!(await appDialog.confirm("この将来セッションを削除しますか？"))) return;
+  if (!(await appDialog.confirm(t.planned.deleteConfirm))) return;
   busy.value = true;
   error.value = null;
   try {
@@ -150,6 +153,9 @@ const ghostButton = {
 
 export function PlannedSessionsPage() {
   useEffect(() => {
+    // フォームの初期値はモジュール読み込み時（クラブ決定前）に作られる。GG の会場が
+    // 入ったままなら、このクラブ用に空にする。
+    if (!isGgClub() && form.value.location === "Hendon") form.value = { ...form.value, location: "" };
     void refreshAll();
   }, []);
 
@@ -157,16 +163,16 @@ export function PlannedSessionsPage() {
 
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>将来セッション</h2>
+      <h2 style={{ marginTop: 0 }}>{t.planned.title}</h2>
 
       <section class="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, fontSize: 15 }}>新規作成</h3>
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>{t.planned.createTitle}</h3>
         <p class="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
-          作成・編集・削除にはクラブ PIN が必要です。
+          {t.planned.pinHint}
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           <label>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>日付</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{t.planned.date}</div>
             <input
               type="date"
               data-testid="planned-date"
@@ -178,12 +184,12 @@ export function PlannedSessionsPage() {
             />
           </label>
           <label>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>会場</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{t.planned.venue}</div>
             <input
               type="text"
               data-testid="planned-location"
               value={form.value.location}
-              placeholder="Golders Hill"
+              placeholder={isGgClub() ? "Golders Hill" : ""}
               onInput={(e) => {
                 form.value = { ...form.value, location: (e.currentTarget as HTMLInputElement).value };
               }}
@@ -193,7 +199,7 @@ export function PlannedSessionsPage() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "auto auto auto 1fr", gap: 12, alignItems: "center", marginBottom: 8 }}>
           <label>
-            <span style={{ fontWeight: 700, fontSize: 13 }}>コート </span>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>{t.planned.courts}</span>
             <input
               type="number"
               min={1}
@@ -214,9 +220,9 @@ export function PlannedSessionsPage() {
               onInput={(e) => {
                 form.value = { ...form.value, allowSingles: (e.currentTarget as HTMLInputElement).checked };
               }}
-            />{" "}シングルス許可
+            />{" "}{t.planned.allowSingles}
           </label>
-          <label style={{ fontSize: 13 }} title="公開リンクで「行く人」リストを公開するか">
+          <label style={{ fontSize: 13 }} title={t.planned.showGoingTitle}>
             <input
               type="checkbox"
               data-testid="planned-show-going"
@@ -224,7 +230,7 @@ export function PlannedSessionsPage() {
               onInput={(e) => {
                 form.value = { ...form.value, showGoingListOnPublic: (e.currentTarget as HTMLInputElement).checked };
               }}
-            />{" "}行く人リストを公開
+            />{" "}{t.planned.showGoing}
           </label>
         </div>
         <button
@@ -234,7 +240,7 @@ export function PlannedSessionsPage() {
           disabled={busy.value || !form.value.location.trim() || !form.value.date}
           onClick={() => gate(submitCreate)}
         >
-          作成
+          {t.planned.create}
         </button>
       </section>
 
@@ -243,7 +249,7 @@ export function PlannedSessionsPage() {
       )}
 
       {plannedSessionStore.list.value.length === 0 ? (
-        <p class="muted">まだ将来セッションがありません。</p>
+        <p class="muted">{t.planned.empty}</p>
       ) : (
         plannedSessionStore.list.value.map((ps) => {
           const sessionRsvps = rsvpStore.bySession.value.get(ps.id) ?? [];
@@ -253,7 +259,7 @@ export function PlannedSessionsPage() {
                 <strong style={{ fontSize: 16 }}>
                   {ps.date} @ {ps.location}{" "}
                   <span class="muted" style={{ fontSize: 13, fontWeight: 500 }}>
-                    ({ps.court_count}コート)
+                    {t.planned.courtCount(ps.court_count)}
                   </span>
                 </strong>
                 <button
@@ -263,14 +269,14 @@ export function PlannedSessionsPage() {
                   disabled={busy.value}
                   style={{ ...ghostButton, color: "crimson", borderColor: "crimson" }}
                 >
-                  削除
+                  {t.planned.delete}
                 </button>
               </header>
 
               <RsvpSummary rsvps={sessionRsvps} activeMembers={rosterStore.active.value} />
 
               <details style={{ marginTop: 12 }}>
-                <summary style={{ cursor: "pointer", fontWeight: 700 }}>RSVP を編集</summary>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t.planned.editRsvp}</summary>
                 <div style={{ marginTop: 8 }}>
                   {rosterStore.active.value.map((m) => {
                     const current = sessionRsvps.find((r) => r.member_id === m.id);
@@ -282,7 +288,7 @@ export function PlannedSessionsPage() {
                       >
                         <span style={{ flex: 1, fontWeight: 600 }}>{m.name}</span>
                         <span class="muted" style={{ width: 60, fontSize: 12, textAlign: "right" }}>
-                          {current?.status === "going" ? "行く" : current?.status === "maybe" ? "未定" : current?.status === "not_going" ? "行かない" : "—"}
+                          {current?.status === "going" ? t.rsvp.going : current?.status === "maybe" ? t.rsvp.maybe : current?.status === "not_going" ? t.rsvp.notGoing : "—"}
                         </span>
                         {(["going", "maybe", "not_going"] as const).map((s) => (
                           <button
@@ -298,7 +304,7 @@ export function PlannedSessionsPage() {
                               borderColor: current?.status === s ? "var(--ink)" : "var(--line)",
                             }}
                           >
-                            {s === "going" ? "行く" : s === "maybe" ? "未定" : "行かない"}
+                            {s === "going" ? t.rsvp.going : s === "maybe" ? t.rsvp.maybe : t.rsvp.notGoing}
                           </button>
                         ))}
                       </div>
@@ -321,7 +327,7 @@ export function PlannedSessionsPage() {
                   disabled={busy.value}
                   style={ghostButton}
                 >
-                  {linkCopied.value === ps.id ? "コピー済み ✓" : ps.public_rsvp_token ? "公開リンクをコピー" : "公開リンクを発行"}
+                  {linkCopied.value === ps.id ? t.planned.linkCopied : ps.public_rsvp_token ? t.planned.copyLink : t.planned.issueLink}
                 </button>
                 {ps.public_rsvp_token && (
                   <button
@@ -331,7 +337,7 @@ export function PlannedSessionsPage() {
                     disabled={busy.value}
                     style={ghostButton}
                   >
-                    リンクを再発行
+                    {t.planned.rotateLink}
                   </button>
                 )}
                 <button
@@ -341,7 +347,7 @@ export function PlannedSessionsPage() {
                   onClick={() => navigate(`/session/new?from=${ps.id}`)}
                   style={{ marginLeft: "auto" }}
                 >
-                  セッション開始 →
+                  {t.planned.start}
                 </button>
               </div>
             </div>
@@ -350,7 +356,7 @@ export function PlannedSessionsPage() {
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
 
       {modal}

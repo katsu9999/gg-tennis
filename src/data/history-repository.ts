@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 import type { PairHistory } from "@/engine/models";
 
 export interface HistoryRepository {
@@ -14,15 +15,26 @@ interface PairHistoryRow {
   opponent_w: number;
 }
 
-export function createHistoryRepository(supabase: SupabaseClient): HistoryRepository {
+export function createHistoryRepository(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): HistoryRepository {
   const t = () => supabase.from("pair_history");
   return {
     async loadPairHistory(): Promise<PairHistory> {
-      const { data, error } = await t().select("*");
+      // ペア履歴はクラブ列を持たない（会員 id の組）。このクラブの会員どうしの組だけを
+      // 読む。全部読むと、終了時の書き戻しで他クラブの重みまで減衰・上書きしてしまう。
+      const [{ data, error }, members] = await Promise.all([
+        t().select("*"),
+        supabase.from("members").select("id").eq("club_id", clubId()),
+      ]);
       if (error) throw error;
+      if (members.error) throw members.error;
+      const mine = new Set(((members.data ?? []) as { id: number }[]).map((m) => m.id));
       const partnerW = new Map<string, number>();
       const opponentW = new Map<string, number>();
       for (const r of (data ?? []) as PairHistoryRow[]) {
+        if (!mine.has(r.member_a) || !mine.has(r.member_b)) continue;
         const a = Math.min(r.member_a, r.member_b);
         const b = Math.max(r.member_a, r.member_b);
         const key = `${a}:${b}`;

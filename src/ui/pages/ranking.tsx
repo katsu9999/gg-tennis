@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { rankingStore, rosterStore } from "@/ui/stores";
 import { linkTo } from "@/ui/router";
+import { t } from "@/ui/i18n";
 
 type Tab = "elo" | "pair" | "attendance";
 
@@ -46,7 +47,7 @@ export function RankingPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>ランキング</h2>
+      <h2 style={{ marginTop: 0 }}>{t.ranking.title}</h2>
 
       <section style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button
@@ -57,7 +58,7 @@ export function RankingPage() {
         >
           ← {year - 1}
         </button>
-        <strong style={{ fontSize: 18 }} data-testid="year-display">{year} シーズン</strong>
+        <strong style={{ fontSize: 18 }} data-testid="year-display">{t.ranking.season(year)}</strong>
         <button
           type="button"
           data-testid="year-next"
@@ -70,25 +71,25 @@ export function RankingPage() {
       </section>
 
       <section style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {(["elo", "pair", "attendance"] as const).map((t) => (
+        {(["elo", "pair", "attendance"] as const).map((k) => (
           <button
-            key={t}
+            key={k}
             type="button"
-            data-testid={`tab-${t}`}
-            onClick={() => { tab.value = t; }}
-            style={tabStyle(tab.value === t)}
+            data-testid={`tab-${k}`}
+            onClick={() => { tab.value = k; }}
+            style={tabStyle(tab.value === k)}
           >
-            {t === "elo" ? "個人 (Elo)" : t === "pair" ? "ペア" : "参加"}
+            {k === "elo" ? t.ranking.tabElo : k === "pair" ? t.ranking.tabPair : t.ranking.tabAttendance}
           </button>
         ))}
       </section>
 
       {rankingStore.loading.value && (
-        <p class="muted" data-testid="ranking-loading">読み込み中…</p>
+        <p class="muted" data-testid="ranking-loading">{t.ranking.loading}</p>
       )}
 
       {!rankingStore.loading.value && !r && (
-        <p class="muted">データがありません。</p>
+        <p class="muted">{t.ranking.noData}</p>
       )}
 
       {r && tab.value === "elo" && (
@@ -105,7 +106,7 @@ export function RankingPage() {
               </li>
             );
           })}
-          {r.elo.size === 0 && <li class="muted">まだ試合データがありません。</li>}
+          {r.elo.size === 0 && <li class="muted">{t.ranking.noMatches}</li>}
         </ol>
       )}
 
@@ -124,7 +125,7 @@ export function RankingPage() {
               const rate = Math.round((100 * p.win) / (p.win + p.loss));
               return (
                 <li key={key} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < arr.length - 1 ? "1px solid var(--line)" : "none" }}>
-                  <span><strong>{i + 1}.</strong> {byMemberId.get(aId) ?? `#${aId}`} ＆ {byMemberId.get(bId) ?? `#${bId}`}</span>
+                  <span><strong>{i + 1}.</strong> {byMemberId.get(aId) ?? `#${aId}`}{t.ranking.pairJoin}{byMemberId.get(bId) ?? `#${bId}`}</span>
                   <span>
                     <strong>{rate}%</strong>
                     <span class="muted" style={{ marginLeft: 8, fontSize: 13 }}>({p.win}–{p.loss})</span>
@@ -132,7 +133,7 @@ export function RankingPage() {
                 </li>
               );
             })}
-          {r.pair.size === 0 && <li class="muted">最低3試合のペアがまだいません。</li>}
+          {r.pair.size === 0 && <li class="muted">{t.ranking.noPairs}</li>}
         </ol>
       )}
 
@@ -141,15 +142,15 @@ export function RankingPage() {
           {[...r.attendance.entries()].sort((a, b) => b[1] - a[1]).map(([id, n], i, arr) => (
             <li key={id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < arr.length - 1 ? "1px solid var(--line)" : "none" }}>
               <span><strong>{i + 1}.</strong> {byMemberId.get(id) ?? `#${id}`}</span>
-              <strong>{n}回</strong>
+              <strong>{t.ranking.attendanceCount(n)}</strong>
             </li>
           ))}
-          {r.attendance.size === 0 && <li class="muted">過去のセッションがありません。</li>}
+          {r.attendance.size === 0 && <li class="muted">{t.ranking.noSessions}</li>}
         </ol>
       )}
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
     </main>
   );

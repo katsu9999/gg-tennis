@@ -85,6 +85,6 @@ describe("MemberRepository", () => {
     const c = fakeClient([]);
     const repo = createMemberRepository(c);
     await repo.hardDelete(7, "test-pin");
-    expect(c.rpc).toHaveBeenCalledWith("delete_member", { p_pin: "test-pin", p_id: 7 });
+    expect(c.rpc).toHaveBeenCalledWith("delete_member", { p_pin: "test-pin", p_id: 7, p_club: 1 });
   });
 });

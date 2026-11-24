@@ -10,7 +10,7 @@ import { useRequirePin } from "@/ui/components/pin-modal";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
-import { buildSummaryPayload, offerSessionSummary } from "@/ui/line-notify";
+import { buildSummaryPayload, lineAvailable, offerSessionSummary } from "@/ui/line-notify";
 import { StandingsTable } from "@/ui/components/standings-table";
 import { swapPastPlayer } from "@/state/past-swap";
 import type { Round } from "@/engine/models";
@@ -255,7 +255,7 @@ function SessionDetail({ session }: { session: SessionRow }) {
         >
           {t.past.backToList}
         </button>
-        {!IS_LOCAL && (
+        {lineAvailable() && (
           <button
             type="button"
             data-testid="past-summary-btn"

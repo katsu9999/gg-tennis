@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { navigate, linkTo } from "@/ui/router";
+import { navigate, linkTo, absoluteLinkTo } from "@/ui/router";
 import {
   plannedSessionStore,
   rsvpStore,
@@ -12,6 +12,7 @@ import { sessionHasResults } from "@/state/session-store";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { BRAND, IS_LOCAL } from "@/flavor";
+import { currentClub, isGgClub } from "@/data/club";
 
 /** A session that's still "ongoing" more than this many hours after creation is
  *  almost certainly an abandoned PWA tab. Surface it so it can be wrapped up
@@ -82,7 +83,9 @@ export function HomePage() {
               type="button"
               class="btn-primary"
               onClick={() => {
-                const base = `${window.location.origin}/rsvp/${next.public_rsvp_token}`;
+                // Base（/gg-tennis）とクラブの接頭辞込みの URL。以前は origin 直下に
+                // なっていて、GitHub Pages では開けないリンクだった。
+                const base = absoluteLinkTo(`/rsvp/${next.public_rsvp_token}`);
                 void navigator.clipboard.writeText(base).catch(() => undefined);
               }}
               style={{ flex: 1 }}
@@ -116,7 +119,7 @@ export function HomePage() {
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 20 }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 24 }}>
         <strong style={{ fontSize: 32, color: "var(--ink)", letterSpacing: "-0.02em" }}>
-          {BRAND}
+          {isGgClub() ? BRAND : currentClub.value.name}
         </strong>
         {!IS_LOCAL && <span class="muted">Tennis Court Shuffle</span>}
       </header>

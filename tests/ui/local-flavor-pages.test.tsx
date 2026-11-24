@@ -42,7 +42,7 @@ vi.mock("@/ui/stores", () => import("@/ui/stores.local"));
 // mistakes or missed extractions).
 vi.mock("@/ui/i18n", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/ui/i18n")>();
-  return { ...mod, LOCALE: "en", t: mod.en };
+  return { ...mod, getLocale: () => "en" as const, t: mod.en };
 });
 
 import { HomePage } from "@/ui/pages/home";

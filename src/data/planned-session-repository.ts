@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 
 export interface PlannedSessionRow {
   id: string;
@@ -30,27 +31,31 @@ export interface PlannedSessionRepository {
   delete(id: string, pin: string): Promise<void>;
 }
 
-export function createPlannedSessionRepository(supabase: SupabaseClient): PlannedSessionRepository {
+export function createPlannedSessionRepository(
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
+): PlannedSessionRepository {
   const t = () => supabase.from("planned_sessions");
+  const scoped = () => t().select("*").eq("club_id", clubId());
   return {
     async list() {
-      const { data, error } = await t().select("*").order("date");
+      const { data, error } = await scoped().order("date");
       if (error) throw error;
       return (data ?? []) as PlannedSessionRow[];
     },
     async loadById(id) {
-      const { data, error } = await t().select("*").eq("id", id).maybeSingle();
+      const { data, error } = await scoped().eq("id", id).maybeSingle();
       if (error) throw error;
       return (data as PlannedSessionRow | null) ?? null;
     },
     async loadByToken(token) {
-      const { data, error } = await t().select("*").eq("public_rsvp_token", token).maybeSingle();
+      const { data, error } = await scoped().eq("public_rsvp_token", token).maybeSingle();
       if (error) throw error;
       return (data as PlannedSessionRow | null) ?? null;
     },
     async loadNext() {
       const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await t().select("*").gte("date", today).order("date").maybeSingle();
+      const { data, error } = await scoped().gte("date", today).order("date").limit(1).maybeSingle();
       if (error) throw error;
       return (data as PlannedSessionRow | null) ?? null;
     },
@@ -63,6 +68,7 @@ export function createPlannedSessionRepository(supabase: SupabaseClient): Planne
         p_court_count: input.court_count,
         p_allow_singles: input.allow_singles,
         p_show_going_list_on_public: input.show_going_list_on_public,
+        p_club: clubId(),
       });
       if (error) throw error;
       const row = await this.loadById(id as string);
@@ -73,6 +79,7 @@ export function createPlannedSessionRepository(supabase: SupabaseClient): Planne
       const { data: token, error } = await supabase.rpc("rotate_public_rsvp_token", {
         p_pin: pin,
         p_id: id,
+        p_club: clubId(),
       });
       if (error) throw error;
       return token as string;
@@ -81,6 +88,7 @@ export function createPlannedSessionRepository(supabase: SupabaseClient): Planne
       const { error } = await supabase.rpc("delete_planned_session", {
         p_pin: pin,
         p_id: id,
+        p_club: clubId(),
       });
       if (error) throw error;
     },

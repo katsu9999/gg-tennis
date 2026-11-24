@@ -1,18 +1,24 @@
 /**
- * Hand-rolled string tables — two locales, ~90 strings, no plural/gender
- * complexity, so a library would be dead weight.
+ * Hand-rolled string tables — two locales, no plural/gender complexity, so a
+ * library would be dead weight.
  *
  * - `ja` is the source of truth: current GG literals, verbatim (extraction
  *   must leave the GG flavour pixel-identical).
- * - `en` is written for the LOCAL flavour's reality (device-only, no
- *   rankings/PIN/server) — do not translate ja server-speak literally.
+ * - `en` serves BOTH flavours: the LOCAL build (device-only, no
+ *   rankings/PIN/server) and English-speaking clubs on the server build.
+ *   Wording that is only true for one flavour picks its text with IS_LOCAL
+ *   (a build-time constant, so a module-load ternary is enough).
  * - Interpolated strings are FUNCTION entries, not templates.
  * - `en: Strings` (= typeof ja) makes key parity a compile error.
  *
- * GG builds with VITE_LOCALE unset (→ ja); local builds set VITE_LOCALE=en.
- * Only pages shipped in the local flavour are extracted; GG-only pages
- * (planned-sessions / public-rsvp / ranking / settings) keep their literals.
+ * The locale is chosen at RUNTIME: the default comes from VITE_LOCALE
+ * (unset → ja for GG; local builds set VITE_LOCALE=en), and `setLocale()`
+ * switches it — called once at boot, before the first render (e.g. from the
+ * club the URL points at). `t` is a Proxy, so `t.section.key` always reads
+ * the current table; no re-render is triggered by a switch.
  */
+
+import { IS_LOCAL } from "@/flavor";
 
 export const ja = {
   common: {
@@ -226,6 +232,158 @@ export const ja = {
     privacyTitle: "プライバシー",
     privacyLink: "プライバシーノーティス",
   },
+  settings: {
+    title: "設定",
+    displayName: "あなたの表示名",
+    displayNameHint: "セッション開始時に「○○ さんが運営中」と表示されます。任意。",
+    displayNamePlaceholder: "例: Katsu",
+    save: "保存",
+    pinTitle: "クラブ PIN",
+    // JSX joined the two source lines with a single space — kept verbatim.
+    pinHint: "メンバー削除や予定セッション作成など、破壊操作の保護に使います。 定期的にローテーションしてください。",
+    pinStatus: "状態:",
+    pinUnlocked: "解錠中",
+    pinLocked: "ロック中",
+    lock: "ロック",
+    newPinPlaceholder: "新しい PIN (4 文字以上)",
+    rotatePin: "PIN 更新",
+    pinUpdated: "PIN を更新しました",
+    outdoorTitle: "屋外モード",
+    outdoorHint1: "画面の明るさを最大にしてください。",
+    outdoorHint2: "Web版はブラウザ制約で輝度を自動制御できません。",
+    outdoorHint3: "v1.5 のネイティブ App 版では自動 MAX 化される予定です。",
+    privacyTitle: "プライバシー",
+    privacyLink: "プライバシーノーティス（日本語 / English）",
+  },
+  pin: {
+    title: "クラブ PIN を入力",
+    hint: "メンバー削除や設定変更などの操作には PIN が必要です。",
+    inputLabel: "クラブ PIN",
+    wrongPin: "PIN が違います",
+    verifying: "確認中…",
+    unlock: "解錠",
+    locked: "PIN がロックされています",
+  },
+  planned: {
+    title: "将来セッション",
+    createTitle: "新規作成",
+    pinHint: "作成・編集・削除にはクラブ PIN が必要です。",
+    date: "日付",
+    venue: "会場",
+    courts: "コート ",
+    allowSingles: "シングルス許可",
+    showGoingTitle: "公開リンクで「行く人」リストを公開するか",
+    showGoing: "行く人リストを公開",
+    create: "作成",
+    empty: "まだ将来セッションがありません。",
+    courtCount: (n: number) => `(${n}コート)`,
+    delete: "削除",
+    deleteConfirm: "この将来セッションを削除しますか？",
+    editRsvp: "RSVP を編集",
+    linkCopied: "コピー済み ✓",
+    copyLink: "公開リンクをコピー",
+    issueLink: "公開リンクを発行",
+    rotateLink: "リンクを再発行",
+    start: "セッション開始 →",
+  },
+  rsvp: {
+    going: "行く",
+    maybe: "未定",
+    notGoing: "行かない",
+    goingCount: (n: number) => `行く (${n})`,
+    maybeCount: (n: number) => `未定 (${n})`,
+    notGoingCount: (n: number) => `行かない (${n})`,
+    unansweredCount: (n: number) => `未回答 (${n})`,
+    nobodyYet: "まだいません",
+    chipsOthers: (maybe: number, notGoing: number, unanswered: number) =>
+      `❓ 未定 ${maybe}人 · ❌ 行かない ${notGoing}人 · ⬜ 未回答 ${unanswered}人`,
+    // ── public RSVP page ──
+    loading: "読み込み中…",
+    invalidTitle: "このリンクは無効です",
+    invalidBody: "主催者にお問い合わせください。",
+    headerLabel: "出欠回答",
+    courtsInfo: (courts: number, allowSingles: boolean) =>
+      `コート ${courts} 面 · ${allowSingles ? "シングルス許可" : "ダブルスのみ"}`,
+    goingTotal: (n: number) => `✅ 行く: ${n}人`,
+    othersCount: (maybe: number, notGoing: number) =>
+      `❓ 未定 ${maybe}人 · ❌ 行かない ${notGoing}人`,
+    yourAnswer: "あなたの回答",
+    pickMember: "名簿から選ぶ",
+    pickPlaceholder: "— 選択してください —",
+    note: "メモ（任意）",
+    notePlaceholder: "30分遅れる など",
+    submitted: "送信しました — このブラウザから回答を変更できます。",
+    privacy: "プライバシー",
+    footer: " · クラブ内輪共有のみ。SNSへの転載はご遠慮ください。",
+  },
+  ranking: {
+    title: "ランキング",
+    season: (year: number) => `${year} シーズン`,
+    tabElo: "個人 (Elo)",
+    tabPair: "ペア",
+    tabAttendance: "参加",
+    loading: "読み込み中…",
+    noData: "データがありません。",
+    noMatches: "まだ試合データがありません。",
+    pairJoin: " ＆ ",
+    noPairs: "最低3試合のペアがまだいません。",
+    attendanceCount: (n: number) => `${n}回`,
+    noSessions: "過去のセッションがありません。",
+  },
+  entry: {
+    title: "GG メンバー専用",
+    hint: "この端末で初めて開くときだけ、クラブ PIN を入れてください。",
+    enter: "開く",
+    remember: "一度入れると、この端末では次から聞きません",
+    forgetTitle: "この端末の入室",
+    forgetHint: "共用の端末で使い終わったら、ここで締め出せます（次に開くとき PIN を聞きます）。",
+    forget: "この端末を締め出す",
+    forgetConfirm: "この端末を締め出します。次に開くときは PIN が必要です。よろしいですか？",
+  },
+  clubs: {
+    title: "クラブの追加",
+    intro: "別のクラブ用のシャッフル・ランキングを作ります。名簿・ランキング・過去セッション・PIN はクラブごとに完全に別で、GG のデータとは混ざりません。",
+    ggOnly: "クラブの追加は GG の画面からだけできます。",
+    listTitle: "クラブ一覧",
+    addTitle: "新しいクラブ",
+    name: "クラブ名",
+    slug: "URL 用の名前（英小文字・数字・ハイフン）",
+    slugRule: "英小文字・数字・ハイフンで2〜30文字",
+    language: "表示言語",
+    pin: "新しいクラブの PIN（6文字以上）",
+    pinConfirm: "PIN をもう一度",
+    pinHint: "作成には GG の PIN が要ります。作ったら、リンクとこの PIN を相手のクラブの幹事に渡してください。PIN は相手が設定画面で変えられます。",
+    create: "クラブを作る",
+    creating: "作成中…",
+    createdTitle: (name: string) => `${name} を作りました`,
+    createdHint: "このリンクと PIN を相手に渡してください。ホーム画面に追加すれば、このクラブ専用のアプリとして使えます。",
+    copyLink: "リンクをコピー",
+    copied: "コピーしました",
+    createFailed: (msg: string) => `クラブを作れませんでした:\n${msg}`,
+    errSlugTaken: "その URL 用の名前は使われています。別の名前にしてください。",
+    errSlugInvalid: "その URL 用の名前は使えません（英小文字・数字・ハイフンで2〜30文字、予約語は不可）。",
+    errPinShort: "PIN は6文字以上にしてください。",
+    errAdminPin: "GG の PIN が違います。",
+    backToSettings: "← 設定へ",
+    settingsLink: "🏟 別のクラブ用を作る",
+  },
+  errors: {
+    generating: "ラウンドを生成中です。少し待ってからやり直してください。",
+    tooFewPlayers: "参加者が2人未満になります。1人以上残してください。",
+    subOnlyForLeavers: "代役は帰る人にだけ指定できます。",
+    subMustStay: "代わりに入る人が残るメンバーにいません。",
+    subMustAttend: "代わりに入る人は今日の参加者から選んでください。",
+    sameSwap: "同じ人どうしは入れ替えられません。",
+    outNotOnCourt: "入れ替える人がこのラウンドのコートにいません。",
+    inAlreadyOnCourt: "代わりに入る人は既にコートに出ています。",
+    pinLocked: "PIN がロックされています",
+    pinServer: (msg: string) => `サーバーエラー: ${msg} (migrations 0004-0006 が未適用かも)`,
+    pinNetwork: (msg: string) => `通信エラー: ${msg}`,
+    unknown: "不明",
+  },
+  privacy: {
+    header: "プライバシー / Privacy",
+  },
 };
 
 export type Strings = typeof ja;
@@ -248,18 +406,26 @@ export const en: Strings = {
     title: "Name → today's number",
     checkYourNumber: "Everyone, check your number.",
     startRound: "Start round",
-    generateFailed: (msg: string) => `Failed to generate the round:\n${msg}\nPlease try again.`,
+    generateFailed: (msg: string) =>
+      IS_LOCAL
+        ? `Failed to generate the round:\n${msg}\nPlease try again.`
+        : `Failed to generate or save the round:\n${msg}\nCheck your connection and try again.`,
   },
   round: {
     saveFailed: (msg: string) =>
-      `Failed to save the round:\n${msg}\nThe round on screen is not saved yet. It will be saved automatically once the next action succeeds.`,
+      IS_LOCAL
+        ? `Failed to save the round:\n${msg}\nThe round on screen is not saved yet. It will be saved automatically once the next action succeeds.`
+        : `Failed to save the round:\n${msg}\nThe round on screen has not been saved to the server yet — check your connection. ` +
+          "(It will be saved automatically once your next action, such as tapping a winner, succeeds.)",
     preparing: (roundNo: number) => `Preparing R${roundNo}…`,
     generate: "Generate",
     prev: "Prev",
     next: "Next",
     recordWinnerFailed: (msg: string) => `Failed to save the result:\n${msg}`,
     endSession: "End session",
-    endConfirm: "End this session?\n(You can delete it later from Past sessions if this was a mistake.)",
+    endConfirm: IS_LOCAL
+      ? "End this session?\n(You can delete it later from Past sessions if this was a mistake.)"
+      : "End this session and add it to the rankings?\n(You can delete it later from Past sessions if this was a mistake.)",
     endFailed: (msg: string) => `Failed to end the session:\n${msg}`,
     lineSendConfirm: (roundNo: number) => `Send the R${roundNo} assignments to the LINE group?`,
     lineSendNow: "Send this round to LINE",
@@ -297,7 +463,9 @@ export const en: Strings = {
     staleHours: (hours: number) => `Started ${hours}h ago. Forgot to end it?`,
     review: "Review",
     watchOperate: "Open session →",
-    endNowConfirm: "End this session now?",
+    endNowConfirm: IS_LOCAL
+      ? "End this session now?"
+      : "End this session now and add it to the rankings?",
     staleDiscardConfirm:
       "No results were recorded. Discard without keeping it?\n(Cancel = keep in history and end)",
     endFailed: (msg: string) => `Failed to end:\n${msg}`,
@@ -353,7 +521,8 @@ export const en: Strings = {
   roster: {
     title: "Roster",
     addTitle: "Add a player",
-    pinHint: "", // PIN does not exist in the local flavour (hidden there)
+    // Only rendered on the server flavour (the local flavour has no PIN).
+    pinHint: IS_LOCAL ? "" : "Adding or changing players needs the club PIN.",
     pinLocked: "PIN is locked",
     namePlaceholder: "Name",
     add: "Add",
@@ -362,7 +531,9 @@ export const en: Strings = {
     rename: "Rename",
     restore: "Restore",
     archive: "Archive",
-    exportTooltip: "Export this player's data as JSON",
+    exportTooltip: IS_LOCAL
+      ? "Export this player's data as JSON"
+      : "Export this player's data as JSON (UK GDPR right of access)",
     export: "Export",
     delete: "Delete",
     activeHeading: "Active",
@@ -370,9 +541,13 @@ export const en: Strings = {
     archivedHeading: "Archived",
     noArchived: "No archived players.",
     deleteConfirmTitle: "Really delete?",
-    deleteConfirmData: "'s data (profile and pairing history) will be ",
+    deleteConfirmData: IS_LOCAL
+      ? "'s data (profile and pairing history) will be "
+      : "'s data (profile, match history, pairing history and RSVPs) will be ",
     deleteAll: "permanently deleted",
-    deleteConfirmSuffix: ". This cannot be undone.",
+    deleteConfirmSuffix: IS_LOCAL
+      ? ". This cannot be undone."
+      : ". This cannot be undone (UK GDPR right to erasure).",
     deleteAction: "Delete",
     gender: "Gender",
     genderMale: "M",
@@ -385,7 +560,9 @@ export const en: Strings = {
     empty: "No past sessions yet.",
     backToList: "← Back",
     sendSummary: "Send standings",
-    deleteConfirm: "Delete this session?\nThis cannot be undone.",
+    deleteConfirm: IS_LOCAL
+      ? "Delete this session?\nThis cannot be undone."
+      : "Delete this session?\nIts results will also be removed from the rankings.\nThis cannot be undone.",
     deleting: "Deleting…",
     deleteBtn: "🗑 Delete",
     pinUnavailable: "PIN unavailable",
@@ -434,10 +611,189 @@ export const en: Strings = {
     privacyTitle: "Privacy",
     privacyLink: "Privacy notice",
   },
+  settings: {
+    title: "Settings",
+    displayName: "Your display name",
+    displayNameHint: 'Shown as "Hosted by …" when you start a session. Optional.',
+    displayNamePlaceholder: "e.g. Alex",
+    save: "Save",
+    pinTitle: "Club PIN",
+    pinHint:
+      "Protects destructive actions such as deleting members or creating planned sessions. Change it regularly.",
+    pinStatus: "Status:",
+    pinUnlocked: "Unlocked",
+    pinLocked: "Locked",
+    lock: "Lock",
+    newPinPlaceholder: "New PIN (at least 4 characters)",
+    rotatePin: "Update PIN",
+    pinUpdated: "PIN updated",
+    outdoorTitle: "Outdoor mode",
+    outdoorHint1: "Turn your screen brightness up to maximum.",
+    outdoorHint2: "Browsers don't let the web version control brightness automatically.",
+    outdoorHint3: "The native app (v1.5) is planned to do this for you.",
+    privacyTitle: "Privacy",
+    privacyLink: "Privacy notice",
+  },
+  pin: {
+    title: "Enter the club PIN",
+    hint: "The PIN is needed for actions such as deleting members or changing settings.",
+    inputLabel: "Club PIN",
+    wrongPin: "Incorrect PIN",
+    verifying: "Checking…",
+    unlock: "Unlock",
+    locked: "PIN is locked",
+  },
+  planned: {
+    title: "Planned sessions",
+    createTitle: "New planned session",
+    pinHint: "Creating, editing or deleting needs the club PIN.",
+    date: "Date",
+    venue: "Venue",
+    courts: "Courts ",
+    allowSingles: "Allow singles",
+    showGoingTitle: "Show the list of who's going on the public link",
+    showGoing: "Show who's going publicly",
+    create: "Create",
+    empty: "No planned sessions yet.",
+    courtCount: (n: number) => `(${n} ${n === 1 ? "court" : "courts"})`,
+    delete: "Delete",
+    deleteConfirm: "Delete this planned session?",
+    editRsvp: "Edit RSVPs",
+    linkCopied: "Copied ✓",
+    copyLink: "Copy public link",
+    issueLink: "Create public link",
+    rotateLink: "Reissue link",
+    start: "Start session →",
+  },
+  rsvp: {
+    going: "Going",
+    maybe: "Maybe",
+    notGoing: "Not going",
+    goingCount: (n: number) => `Going (${n})`,
+    maybeCount: (n: number) => `Maybe (${n})`,
+    notGoingCount: (n: number) => `Not going (${n})`,
+    unansweredCount: (n: number) => `No reply (${n})`,
+    nobodyYet: "Nobody yet",
+    chipsOthers: (maybe: number, notGoing: number, unanswered: number) =>
+      `❓ Maybe ${maybe} · ❌ Not going ${notGoing} · ⬜ No reply ${unanswered}`,
+    // ── public RSVP page ──
+    loading: "Loading…",
+    invalidTitle: "This link is not valid",
+    invalidBody: "Please contact the organiser.",
+    headerLabel: "RSVP",
+    courtsInfo: (courts: number, allowSingles: boolean) =>
+      `${courts} ${courts === 1 ? "court" : "courts"} · ${allowSingles ? "Singles allowed" : "Doubles only"}`,
+    goingTotal: (n: number) => `✅ Going: ${n}`,
+    othersCount: (maybe: number, notGoing: number) =>
+      `❓ Maybe ${maybe} · ❌ Not going ${notGoing}`,
+    yourAnswer: "Your reply",
+    pickMember: "Pick your name",
+    pickPlaceholder: "— Select —",
+    note: "Note (optional)",
+    notePlaceholder: "e.g. Running 30 minutes late",
+    submitted: "Sent — you can change your reply from this browser.",
+    privacy: "Privacy",
+    footer: " · For club members only. Please don't repost on social media.",
+  },
+  ranking: {
+    title: "Rankings",
+    season: (year: number) => `${year} season`,
+    tabElo: "Individual (Elo)",
+    tabPair: "Pairs",
+    tabAttendance: "Attendance",
+    loading: "Loading…",
+    noData: "No data.",
+    noMatches: "No match data yet.",
+    pairJoin: " & ",
+    noPairs: "No pairs with at least 3 matches yet.",
+    attendanceCount: (n: number) => `${n} ${n === 1 ? "session" : "sessions"}`,
+    noSessions: "No past sessions.",
+  },
+  entry: {
+    title: "GG members only",
+    hint: "Enter the club PIN the first time you open the app on this device.",
+    enter: "Open",
+    remember: "Once entered, this device won't ask again",
+    forgetTitle: "Access on this device",
+    forgetHint: "On a shared device, lock it again when you're done (the PIN will be asked next time).",
+    forget: "Lock this device",
+    forgetConfirm: "Lock this device? The PIN will be needed next time.",
+  },
+  clubs: {
+    title: "Add a club",
+    intro: "Create a separate shuffle and ranking for another club. Players, rankings, past sessions and the PIN are completely separate per club.",
+    ggOnly: "Clubs can only be added from the GG app.",
+    listTitle: "Clubs",
+    addTitle: "New club",
+    name: "Club name",
+    slug: "Name for the link (lowercase letters, digits, hyphens)",
+    slugRule: "2–30 lowercase letters, digits or hyphens",
+    language: "Language",
+    pin: "PIN for the new club (6+ characters)",
+    pinConfirm: "PIN again",
+    pinHint: "Creating a club needs the GG PIN. Afterwards, give the link and this PIN to the other club's organiser — they can change the PIN in Settings.",
+    create: "Create club",
+    creating: "Creating…",
+    createdTitle: (name: string) => `${name} has been created`,
+    createdHint: "Share this link and the PIN. Adding it to the home screen gives the club its own app icon.",
+    copyLink: "Copy link",
+    copied: "Copied",
+    createFailed: (msg: string) => `Could not create the club:\n${msg}`,
+    errSlugTaken: "That link name is already taken. Please choose another.",
+    errSlugInvalid: "That link name can't be used (2–30 lowercase letters, digits or hyphens; some words are reserved).",
+    errPinShort: "The PIN must be at least 6 characters.",
+    errAdminPin: "The GG PIN is wrong.",
+    backToSettings: "← Settings",
+    settingsLink: "🏟 Create an app for another club",
+  },
+  errors: {
+    generating: "A round is being generated. Please wait a moment and try again.",
+    tooFewPlayers: "That would leave fewer than 2 players. Keep at least one more.",
+    subOnlyForLeavers: "A replacement can only be set for someone who is leaving.",
+    subMustStay: "The replacement isn't among the players who are staying.",
+    subMustAttend: "Choose the replacement from today's players.",
+    sameSwap: "You can't swap a player with themselves.",
+    outNotOnCourt: "That player isn't on court in this round.",
+    inAlreadyOnCourt: "The replacement is already on court.",
+    pinLocked: "The PIN is locked",
+    pinServer: (msg: string) => `Server error: ${msg}`,
+    pinNetwork: (msg: string) => `Network error: ${msg}`,
+    unknown: "unknown",
+  },
+  privacy: {
+    header: "Privacy",
+  },
 };
 
 export type Locale = "ja" | "en";
-export const LOCALE: Locale = import.meta.env.VITE_LOCALE === "en" ? "en" : "ja";
+const TABLES: Record<Locale, Strings> = { ja, en };
 
-/** The active string table. Pages import this. */
-export const t: Strings = LOCALE === "en" ? en : ja;
+let current: Locale = import.meta.env.VITE_LOCALE === "en" ? "en" : "ja";
+
+/** The active locale (default: VITE_LOCALE === "en" → en, else ja). */
+export function getLocale(): Locale {
+  return current;
+}
+
+/**
+ * Switch the active string table. Call once at boot, before the first
+ * render — already-rendered text is not refreshed. Keeps <html lang> in step.
+ */
+export function setLocale(l: Locale): void {
+  current = l;
+  if (typeof document !== "undefined") document.documentElement.lang = l;
+}
+
+/** The active string table. Pages import this; every read resolves against
+ *  the CURRENT locale, so `t.section.key` follows setLocale(). */
+export const t: Strings = new Proxy({} as Strings, {
+  get: (_target, prop) => Reflect.get(TABLES[current], prop),
+  has: (_target, prop) => Reflect.has(TABLES[current], prop),
+  ownKeys: () => Reflect.ownKeys(TABLES[current]),
+  getOwnPropertyDescriptor: (_target, prop) => {
+    const d = Reflect.getOwnPropertyDescriptor(TABLES[current], prop);
+    // The (empty) target has no own props, so the Proxy invariants require
+    // every reported property to be configurable.
+    return d && { ...d, configurable: true };
+  },
+});

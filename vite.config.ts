@@ -24,8 +24,10 @@ const pwaPlugin: PluginOption[] = isLocalFlavor
           background_color: "#eef1ea",
           display: "standalone",
           orientation: "any",
-          start_url: "/",
-          scope: "/",
+          // マニフェストの場所（Base 込み）からの相対。ホーム画面から開いたときは
+          // ?pwa=1 を見て、最後に使ったクラブ（/c/<slug>）へ移る（main.tsx）。
+          start_url: "./?pwa=1",
+          scope: "./",
           icons: [
             { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
             { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },

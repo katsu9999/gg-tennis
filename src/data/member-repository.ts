@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clubId as defaultClubId } from "@/data/club";
 import type { Gender, Member } from "@/engine/models";
 
 /**
@@ -41,25 +42,27 @@ function toMember(row: MemberRow): Member {
   };
 }
 
-async function fetchMember(supabase: SupabaseClient, id: number): Promise<Member> {
-  const { data, error } = await supabase.from("members").select("*").eq("id", id).single();
+async function fetchMember(supabase: SupabaseClient, id: number, club: number): Promise<Member> {
+  const { data, error } = await supabase.from("members").select("*").eq("club_id", club).eq("id", id).single();
   if (error) throw error;
   return toMember(data as MemberRow);
 }
 
 export function createMemberRepository(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  clubId: () => number = defaultClubId,
 ): MemberRepository {
   const t = () => supabase.from("members");
   return {
     async listAll() {
-      const { data, error } = await t().select("*").order("name");
+      const { data, error } = await t().select("*").eq("club_id", clubId()).order("name");
       if (error) throw error;
       return (data ?? []).map(toMember);
     },
     async listActive() {
       const { data, error } = await t()
         .select("*")
+        .eq("club_id", clubId())
         .eq("status", "active")
         .order("name");
       if (error) throw error;
@@ -72,62 +75,68 @@ export function createMemberRepository(
         p_name: name,
         p_status: "active",
         p_gender: "unknown",
+        p_club: clubId(),
       });
       if (error) throw error;
-      return fetchMember(supabase, data as number);
+      return fetchMember(supabase, data as number, clubId());
     },
     async rename(id, name, pin) {
-      const current = await fetchMember(supabase, id);
+      const current = await fetchMember(supabase, id, clubId());
       const { error } = await supabase.rpc("upsert_member", {
         p_pin: pin,
         p_id: id,
         p_name: name,
         p_status: current.status,
         p_gender: current.gender,
+        p_club: clubId(),
       });
       if (error) throw error;
-      return fetchMember(supabase, id);
+      return fetchMember(supabase, id, clubId());
     },
     async archive(id, pin) {
-      const current = await fetchMember(supabase, id);
+      const current = await fetchMember(supabase, id, clubId());
       const { error } = await supabase.rpc("upsert_member", {
         p_pin: pin,
         p_id: id,
         p_name: current.name,
         p_status: "archived",
         p_gender: current.gender,
+        p_club: clubId(),
       });
       if (error) throw error;
-      return fetchMember(supabase, id);
+      return fetchMember(supabase, id, clubId());
     },
     async unarchive(id, pin) {
-      const current = await fetchMember(supabase, id);
+      const current = await fetchMember(supabase, id, clubId());
       const { error } = await supabase.rpc("upsert_member", {
         p_pin: pin,
         p_id: id,
         p_name: current.name,
         p_status: "active",
         p_gender: current.gender,
+        p_club: clubId(),
       });
       if (error) throw error;
-      return fetchMember(supabase, id);
+      return fetchMember(supabase, id, clubId());
     },
     async setGender(id, gender, pin) {
-      const current = await fetchMember(supabase, id);
+      const current = await fetchMember(supabase, id, clubId());
       const { error } = await supabase.rpc("upsert_member", {
         p_pin: pin,
         p_id: id,
         p_name: current.name,
         p_status: current.status,
         p_gender: gender,
+        p_club: clubId(),
       });
       if (error) throw error;
-      return fetchMember(supabase, id);
+      return fetchMember(supabase, id, clubId());
     },
     async hardDelete(id, pin) {
       const { error } = await supabase.rpc("delete_member", {
         p_pin: pin,
         p_id: id,
+        p_club: clubId(),
       });
       if (error) throw error;
     },

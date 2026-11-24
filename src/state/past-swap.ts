@@ -1,4 +1,5 @@
 import type { AttendeeRef, Round } from "@/engine/models";
+import { t } from "@/ui/i18n";
 import { memberIdsFrom } from "@/engine/models";
 import { findOnCourt, substituteInRound } from "@/engine/substitute";
 import type { MatchLogRepository } from "@/data/match-log-repository";
@@ -33,7 +34,7 @@ export async function swapPastPlayer(
   const round = args.rounds[args.roundIndex];
   if (!round) throw new Error(`R${args.roundIndex + 1} が見つかりません。`);
   const pos = findOnCourt(round, args.out);
-  if (!pos) throw new Error("入れ替える人がこのラウンドのコートにいません。");
+  if (!pos) throw new Error(t.errors.outNotOnCourt);
 
   const patched = substituteInRound(round, args.out, args.incoming, "resters");
   const rounds = args.rounds.map((r, i) => (i === args.roundIndex ? patched : r));

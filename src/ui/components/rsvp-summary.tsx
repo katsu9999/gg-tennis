@@ -1,5 +1,6 @@
 import type { RsvpPublicRow } from "@/data/rsvp-repository";
 import type { Member } from "@/engine/models";
+import { t } from "@/ui/i18n";
 
 interface Props {
   rsvps: RsvpPublicRow[];
@@ -31,7 +32,7 @@ export function RsvpSummary({ rsvps, activeMembers, layout = "lines" }: Props) {
     return (
       <div data-testid="rsvp-summary-chips" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div>
-          ✅ <strong>行く ({going.length})</strong>:{" "}
+          ✅ <strong>{t.rsvp.goingCount(going.length)}</strong>:{" "}
           <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", verticalAlign: "middle" }}>
             {going.slice(0, 5).map((n) => (
               <span
@@ -51,11 +52,11 @@ export function RsvpSummary({ rsvps, activeMembers, layout = "lines" }: Props) {
             {going.length > 5 && (
               <span class="muted" style={{ fontSize: 13, fontWeight: 700 }}>+{going.length - 5}</span>
             )}
-            {going.length === 0 && <span class="muted">まだいません</span>}
+            {going.length === 0 && <span class="muted">{t.rsvp.nobodyYet}</span>}
           </span>
         </div>
         <div class="muted" style={{ fontSize: 13 }}>
-          ❓ 未定 {maybe.length}人 · ❌ 行かない {notGoing.length}人 · ⬜ 未回答 {unanswered.length}人
+          {t.rsvp.chipsOthers(maybe.length, notGoing.length, unanswered.length)}
         </div>
       </div>
     );
@@ -63,10 +64,10 @@ export function RsvpSummary({ rsvps, activeMembers, layout = "lines" }: Props) {
 
   return (
     <div data-testid="rsvp-summary-lines">
-      <p style={{ margin: "4px 0" }}>✅ <strong>行く ({going.length})</strong>: {fmt(going)}</p>
-      <p style={{ margin: "4px 0" }}>❓ <strong>未定 ({maybe.length})</strong>: {fmt(maybe)}</p>
-      <p style={{ margin: "4px 0" }}>❌ <strong>行かない ({notGoing.length})</strong>: {fmt(notGoing)}</p>
-      <p style={{ margin: "4px 0" }} class="muted">⬜ 未回答 ({unanswered.length}): {fmt(unanswered)}</p>
+      <p style={{ margin: "4px 0" }}>✅ <strong>{t.rsvp.goingCount(going.length)}</strong>: {fmt(going)}</p>
+      <p style={{ margin: "4px 0" }}>❓ <strong>{t.rsvp.maybeCount(maybe.length)}</strong>: {fmt(maybe)}</p>
+      <p style={{ margin: "4px 0" }}>❌ <strong>{t.rsvp.notGoingCount(notGoing.length)}</strong>: {fmt(notGoing)}</p>
+      <p style={{ margin: "4px 0" }} class="muted">⬜ {t.rsvp.unansweredCount(unanswered.length)}: {fmt(unanswered)}</p>
     </div>
   );
 }

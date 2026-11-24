@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { isGgClub } from "@/data/club";
 import { useEffect } from "preact/hooks";
 import type { Gender } from "@/engine/models";
 import {
@@ -26,10 +27,11 @@ import { getFromParam } from "@/ui/location";
 // remain. Reset is explicit (via the back button or successful submission).
 const today = () => new Date().toISOString().slice(0, 10);
 
-const DEFAULT_LOCATION = "Hendon";
+// GG のいつもの会場。他のクラブは空欄から（起動時にクラブが決まる前に評価されるので関数）。
+const defaultLocation = (): string => (isGgClub() ? "Hendon" : "");
 
 const date = signal(today());
-const location = signal(DEFAULT_LOCATION);
+const location = signal(defaultLocation());
 const courtCount = signal(3);
 const allowSingles = signal(true);
 const selected = signal<Set<number>>(new Set());
@@ -64,7 +66,7 @@ const rules = signal<ShuffleConfig>(loadStoredRules());
 /** Reset all form state to defaults. Called by tests in beforeEach. */
 export function resetFormState(): void {
   date.value = today();
-  location.value = DEFAULT_LOCATION;
+  location.value = defaultLocation();
   courtCount.value = 3;
   allowSingles.value = true;
   selected.value = new Set();
@@ -83,6 +85,8 @@ function toggle(id: number): void {
 }
 
 async function loadAux(): Promise<void> {
+  // モジュール読み込み時（クラブ決定前）に GG の既定値が入っていたら直す
+  if (!isGgClub() && location.value === "Hendon") location.value = "";
   await rosterStore.load();
   venues.value = await venueRepo.list();
 
@@ -94,15 +98,22 @@ async function loadAux(): Promise<void> {
       plannedSessionRepo.loadById(fromId),
       rsvpStore.loadForSession(fromId),
     ]);
-    if (planned) {
+    // 予定が読めない（別クラブの id・削除済み）なら何も取り込まない。RSVP は予定 id
+    // だけで引けるので、ここで止めないと別クラブの会員が選ばれてしまう。
+    if (!planned) {
+      plannedSessionId.value = null;
+      return;
+    }
+    {
       date.value = planned.date;
       location.value = planned.location;
       courtCount.value = planned.court_count;
       allowSingles.value = planned.allow_singles;
     }
     // Pre-select going members
+    const roster = new Set(rosterStore.all.value.map((m) => m.id));
     const goingIds = rsvps
-      .filter((r) => r.status === "going")
+      .filter((r) => r.status === "going" && roster.has(r.member_id))
       .map((r) => r.member_id);
     if (goingIds.length > 0) {
       selected.value = new Set(goingIds);

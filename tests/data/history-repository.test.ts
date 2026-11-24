@@ -19,6 +19,7 @@ describe("HistoryRepository", () => {
           { member_a: 3, member_b: 7, partner_w: 0.7, opponent_w: 2.1 },
         ],
       },
+      members: { list: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 7 }] },
     });
     const repo = createHistoryRepository(c);
     const h = await repo.loadPairHistory();
@@ -26,6 +27,22 @@ describe("HistoryRepository", () => {
     expect(h.partnerW.get("3:7")).toBeCloseTo(0.7);
     expect(h.opponentW.get("1:2")).toBeCloseTo(1.2);
     expect(h.opponentW.get("3:7")).toBeCloseTo(2.1);
+  });
+
+  it("loadPairHistory は今のクラブの会員どうしの組だけを読む（他クラブの重みを減衰・上書きしない）", async () => {
+    const c = fakeClient({
+      pair_history: {
+        list: [
+          { member_a: 1, member_b: 2, partner_w: 3.5, opponent_w: 1.2 },  // このクラブ
+          { member_a: 1, member_b: 50, partner_w: 9, opponent_w: 9 },     // 50 は別クラブ
+          { member_a: 50, member_b: 51, partner_w: 10, opponent_w: 10 },  // 別クラブどうし
+        ],
+      },
+      members: { list: [{ id: 1 }, { id: 2 }] },
+    });
+    const h = await createHistoryRepository(c, () => 2).loadPairHistory();
+    expect([...h.partnerW.keys()]).toEqual(["1:2"]);
+    expect([...h.opponentW.keys()]).toEqual(["1:2"]);
   });
 
   it("upsertPairWeights enforces member_a < member_b ordering", async () => {

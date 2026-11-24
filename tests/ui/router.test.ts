@@ -56,3 +56,38 @@ describe("matchRouteFor (flavour gating)", () => {
     });
   });
 });
+
+describe("クラブ別 URL（/c/<slug>）", () => {
+  it("パスからクラブを取り出し、ルーティングは接頭辞を外したパスで行う", async () => {
+    const { clubSlugFromPath, stripBase, matchRouteFor } = await import("@/ui/router");
+    expect(clubSlugFromPath("/c/hampstead/ranking")).toBe("hampstead");
+    expect(clubSlugFromPath("/c/hampstead")).toBe("hampstead");
+    expect(clubSlugFromPath("/ranking")).toBeNull();
+    expect(clubSlugFromPath("/cx/hampstead")).toBeNull();
+    expect(stripBase("/c/hampstead/ranking")).toBe("/ranking");
+    expect(stripBase("/c/hampstead")).toBe("/");
+    expect(matchRouteFor(stripBase("/c/hampstead/session/round"), "gg")).toEqual({ name: "round" });
+    expect(matchRouteFor(stripBase("/c/hampstead/rsvp/abc_123"), "gg")).toEqual({ name: "public-rsvp", params: { token: "abc_123" } });
+  });
+
+  it("クラブを決めたら、画面遷移とリンクに接頭辞が付く（GG は付かない）", async () => {
+    const { setClubPrefix, linkTo, navigate, currentPath, absoluteLinkTo } = await import("@/ui/router");
+    setClubPrefix("hampstead");
+    expect(linkTo("/ranking")).toBe("/c/hampstead/ranking");
+    navigate("/roster");
+    expect(location.pathname).toBe("/c/hampstead/roster");
+    expect(currentPath.value).toBe("/roster");
+    expect(absoluteLinkTo("/rsvp/t")).toBe(`${location.origin}/c/hampstead/rsvp/t`);
+    expect(absoluteLinkTo("/", "gg")).toBe(`${location.origin}/`);
+    setClubPrefix("gg");
+    expect(linkTo("/ranking")).toBe("/ranking");
+    setClubPrefix(null);
+    expect(linkTo("/")).toBe("/");
+  });
+
+  it("クラブ管理ページは端末完結版では開けない", async () => {
+    const { matchRouteFor } = await import("@/ui/router");
+    expect(matchRouteFor("/clubs", "gg")).toEqual({ name: "clubs" });
+    expect(matchRouteFor("/clubs", "local")).toEqual({ name: "home" });
+  });
+});

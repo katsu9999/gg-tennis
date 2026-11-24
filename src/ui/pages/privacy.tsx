@@ -3,11 +3,24 @@ import { PRIVACY_JA, PRIVACY_EN, PRIVACY_LOCAL_EN } from "@/ui/privacy-content";
 import type { ComponentChildren } from "preact";
 import { linkTo } from "@/ui/router";
 import { BRAND, IS_LOCAL } from "@/flavor";
+import { getLocale, t, type Locale } from "@/ui/i18n";
+import { currentClub, isGgClub } from "@/data/club";
 
-const lang = signal<"ja" | "en">("ja");
+const escapeHtml = (v: string): string =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** 本文はクラブ名を「Golders Green …」と書いてある。GG 以外のクラブでは、その
+ *  クラブ名に差し替える（クラブ名は入力値なので HTML として無害化してから）。 */
+export function privacyTextForClub(text: string): string {
+  if (isGgClub()) return text;
+  return text.replace(/Golders Green (Tennis Club|テニスクラブ)/g, escapeHtml(currentClub.value.name));
+}
+
+/** The viewer's explicit choice via the toggle; null = follow getLocale(). */
+const langChoice = signal<Locale | null>(null);
 
 export function resetPrivacyState(): void {
-  lang.value = "ja";
+  langChoice.value = null;
 }
 
 function renderMarkdown(text: string): ComponentChildren[] {
@@ -56,27 +69,29 @@ function renderMarkdown(text: string): ComponentChildren[] {
 }
 
 export function PrivacyPage() {
+  // Read at render time so a boot-time setLocale() picks the default language.
+  const lang = langChoice.value ?? getLocale();
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 20 }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 16 }}>
-        <strong style={{ fontSize: 28 }}>{BRAND}</strong>
-        <span class="muted">{IS_LOCAL ? "Privacy" : "プライバシー / Privacy"}</span>
+        <strong style={{ fontSize: 28 }}>{isGgClub() ? BRAND : currentClub.value.name}</strong>
+        <span class="muted">{IS_LOCAL ? "Privacy" : t.privacy.header}</span>
       </header>
 
       {!IS_LOCAL && <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
           type="button"
           data-testid="lang-ja"
-          onClick={() => { lang.value = "ja"; }}
-          disabled={lang.value === "ja"}
+          onClick={() => { langChoice.value = "ja"; }}
+          disabled={lang === "ja"}
           style={{
-            background: lang.value === "ja" ? "var(--ink)" : "transparent",
-            color: lang.value === "ja" ? "#fff" : "var(--ink)",
+            background: lang === "ja" ? "var(--ink)" : "transparent",
+            color: lang === "ja" ? "#fff" : "var(--ink)",
             border: "2px solid var(--ink)",
             borderRadius: 12,
             padding: "6px 16px",
             fontWeight: 800,
-            cursor: lang.value === "ja" ? "default" : "pointer",
+            cursor: lang === "ja" ? "default" : "pointer",
           }}
         >
           日本語
@@ -84,16 +99,16 @@ export function PrivacyPage() {
         <button
           type="button"
           data-testid="lang-en"
-          onClick={() => { lang.value = "en"; }}
-          disabled={lang.value === "en"}
+          onClick={() => { langChoice.value = "en"; }}
+          disabled={lang === "en"}
           style={{
-            background: lang.value === "en" ? "var(--ink)" : "transparent",
-            color: lang.value === "en" ? "#fff" : "var(--ink)",
+            background: lang === "en" ? "var(--ink)" : "transparent",
+            color: lang === "en" ? "#fff" : "var(--ink)",
             border: "2px solid var(--ink)",
             borderRadius: 12,
             padding: "6px 16px",
             fontWeight: 800,
-            cursor: lang.value === "en" ? "default" : "pointer",
+            cursor: lang === "en" ? "default" : "pointer",
           }}
         >
           English
@@ -101,11 +116,11 @@ export function PrivacyPage() {
       </div>}
 
       <article class="card" data-testid="privacy-body">
-        {renderMarkdown(IS_LOCAL ? PRIVACY_LOCAL_EN : lang.value === "ja" ? PRIVACY_JA : PRIVACY_EN)}
+        {renderMarkdown(IS_LOCAL ? PRIVACY_LOCAL_EN : privacyTextForClub(lang === "ja" ? PRIVACY_JA : PRIVACY_EN))}
       </article>
 
       <p class="muted" style={{ marginTop: 24, fontSize: 13 }}>
-        <a href={linkTo("/")}>← ホーム</a>
+        <a href={linkTo("/")}>{t.common.backHome}</a>
       </p>
     </main>
   );

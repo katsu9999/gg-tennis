@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { pinStore } from "@/ui/stores";
+import { t } from "@/ui/i18n";
 
 interface PinModalProps {
   open: boolean;
@@ -38,7 +39,7 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
     if (ok) {
       onUnlocked();
     } else {
-      setErr(pinStore.lastError.value ?? "PIN が違います");
+      setErr(pinStore.lastError.value ?? t.pin.wrongPin);
       setPin("");
       inputRef.current?.focus();
     }
@@ -68,10 +69,10 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
         style={{ maxWidth: 360, width: "100%" }}
       >
         <h2 id="pin-modal-title" style={{ margin: "0 0 8px", fontSize: 18 }}>
-          {title ?? "クラブ PIN を入力"}
+          {title ?? t.pin.title}
         </h2>
         <p class="muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
-          メンバー削除や設定変更などの操作には PIN が必要です。
+          {t.pin.hint}
         </p>
         <input
           ref={inputRef}
@@ -81,7 +82,7 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
           value={pin}
           onInput={(e) => setPin((e.target as HTMLInputElement).value)}
           placeholder="••••"
-          aria-label="クラブ PIN"
+          aria-label={t.pin.inputLabel}
           style={{
             width: "100%",
             fontSize: 18,
@@ -98,7 +99,7 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button type="button" class="btn-secondary" onClick={onCancel} style={{ flex: 1 }}>
-            キャンセル
+            {t.common.cancel}
           </button>
           <button
             type="submit"
@@ -106,7 +107,7 @@ export function PinModal({ open, title, onCancel, onUnlocked }: PinModalProps) {
             disabled={verifying || pin.length < 4}
             style={{ flex: 1 }}
           >
-            {verifying ? "確認中…" : "解錠"}
+            {verifying ? t.pin.verifying : t.pin.unlock}
           </button>
         </div>
       </form>

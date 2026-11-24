@@ -1,4 +1,5 @@
 import { signal, type Signal } from "@preact/signals";
+import { t } from "@/ui/i18n";
 import type { AttendeeRef, Gender, PairHistory, Round, SameSessionStats } from "@/engine/models";
 import { memberIdsFrom, pairKey } from "@/engine/models";
 import {
@@ -407,7 +408,7 @@ export function createSessionStore(deps: {
   // rester-selector はプレー数が多い順に休ませるので、来たばかりの人が
   // 数ラウンド続けて出て、待っていた人が休みに入る。
   async function changeAttendees(input: ChangeAttendeesInput): Promise<ChangeAttendeesResult> {
-    if (generating.value) throw new Error("ラウンドを生成中です。少し待ってからやり直してください。");
+    if (generating.value) throw new Error(t.errors.generating);
     const s = session.value;
     if (!s) throw new Error("No active session.");
 
@@ -415,7 +416,7 @@ export function createSessionStore(deps: {
     const wanted = new Set(input.memberIds);
     const guestCount = s.attendees.filter(a => a.ref.kind !== "member").length;
     if (wanted.size + guestCount < 2) {
-      throw new Error("参加者が2人未満になります。1人以上残してください。");
+      throw new Error(t.errors.tooFewPlayers);
     }
 
     const member = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
@@ -428,10 +429,10 @@ export function createSessionStore(deps: {
     if (current && input.currentSubstitutes && input.currentSubstitutes.size > 0) {
       let r = current;
       for (const [outId, inId] of input.currentSubstitutes) {
-        if (wanted.has(outId)) throw new Error("代役は帰る人にだけ指定できます。");
-        if (!wanted.has(inId)) throw new Error("代わりに入る人が残るメンバーにいません。");
+        if (wanted.has(outId)) throw new Error(t.errors.subOnlyForLeavers);
+        if (!wanted.has(inId)) throw new Error(t.errors.subMustStay);
         if (!s.attendees.some(a => a.ref.kind === "member" && a.ref.memberId === inId)) {
-          throw new Error("代わりに入る人は今日の参加者から選んでください。");
+          throw new Error(t.errors.subMustAttend);
         }
         r = substituteInRound(r, member(outId), member(inId), "none");
         substituted += 1;

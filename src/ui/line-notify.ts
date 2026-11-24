@@ -1,4 +1,5 @@
 import type { AttendeeRef } from "@/engine/models";
+import { currentClub } from "@/data/club";
 import type { InMemorySession } from "@/state/session-store";
 import type { LineRoundPayload, LineRoundsPayload, LineSummaryPayload } from "@/data/line-notify-client";
 import { sendLineNotify, sendLineRounds, sendLineSummary } from "@/data/line-notify-client";
@@ -6,6 +7,12 @@ import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { IS_LOCAL } from "@/flavor";
 import { sessionStore, rosterStore } from "@/ui/stores";
+
+/** LINE に送れるか。端末完結版には送り先が無く、GG 以外のクラブは LINE グループを
+ *  持たない（Edge Function の送り先は GG のグループ1つ。2026-11-22 複数クラブ）。 */
+export function lineAvailable(): boolean {
+  return !IS_LOCAL && currentClub.value.lineEnabled;
+}
 
 /** Circled digit for a todayNumber (①..㊿); parenthesised fallback beyond 50.
  *  On court everyone identifies by their assigned number, so the LINE message
@@ -162,7 +169,7 @@ export function buildSummaryPayload(
  * a no-op there (IS_LOCAL is const-folded, dropping the call at build time).
  */
 export async function offerLineNotify(): Promise<void> {
-  if (IS_LOCAL) return;
+  if (!lineAvailable()) return;
   const s = sessionStore.session.value;
   if (!s) return;
   const memberNames = new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const));
@@ -188,7 +195,7 @@ export async function offerLineNotify(): Promise<void> {
  * 送信に失敗してもラウンドの進行には触らない（alert のみ）。
  */
 export async function offerAllRoundsNotify(): Promise<void> {
-  if (IS_LOCAL) return;
+  if (!lineAvailable()) return;
   const s = sessionStore.session.value;
   if (!s) return;
   const memberNames = new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const));
@@ -211,7 +218,7 @@ export async function offerAllRoundsNotify(): Promise<void> {
  * 1通で流すか聞いて、OKなら送る。実施済みのラウンドは既に送ってあるので出さない。
  */
 export async function offerRemainingRoundsNotify(fromIndex: number): Promise<void> {
-  if (IS_LOCAL) return;
+  if (!lineAvailable()) return;
   const s = sessionStore.session.value;
   if (!s) return;
   const memberNames = new Map(rosterStore.all.value.map((m) => [m.id, m.name] as const));
@@ -241,7 +248,7 @@ export async function offerRemainingRoundsNotify(fromIndex: number): Promise<voi
 export async function offerSessionSummary(
   payload: LineSummaryPayload | null,
 ): Promise<void> {
-  if (IS_LOCAL || !payload) return;
+  if (!lineAvailable() || !payload) return;
   if (!(await appDialog.confirm(t.round.lineSummaryConfirm))) return;
   try {
     await sendLineSummary(payload);
