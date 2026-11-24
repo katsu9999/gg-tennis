@@ -166,6 +166,10 @@ export function scoreCourts(courts: readonly Court[], hist: PairHistory, ss: Sam
  *  has one (6 players on one court, say).
  */
 interface RepeatCount {
+  /** Courts holding a pair the host asked never to put together
+   *  (ShuffleConfig.avoidPairs). Ranked above everything else, including the
+   *  gender rule: it is a person-to-person request, not a preference. */
+  avoid: number;
   /** 女女 vs 男男 matchups. Ranked above everything: the rule it enforces is
    *  "must effectively never happen when avoidable" (see GENDER_GAP2), which
    *  outranks variety by design. */
@@ -185,15 +189,27 @@ function teamPartnerRepeats(team: readonly AttendeeRef[], ss: SameSessionStats):
   return n;
 }
 
+/** Number of avoid-pairs sharing this court (same team or opposite sides). */
+function courtAvoidHits(c: Court, opts: BuildOptions): number {
+  const pairs = opts.config?.avoidPairs;
+  if (!pairs || pairs.length === 0) return 0;
+  const ids = new Set(memberIdsFrom([...c.teamA, ...c.teamB]));
+  let n = 0;
+  for (const [a, b] of pairs) if (ids.has(a) && ids.has(b)) n++;
+  return n;
+}
+
 export function countRepeats(
   courts: readonly Court[],
   ss: SameSessionStats,
   opts: BuildOptions = {},
 ): RepeatCount {
+  let avoid = 0;
   let genderGap2 = 0;
   let partner = 0;
   let quad = 0;
   for (const c of courts) {
+    avoid += courtAvoidHits(c, opts);
     partner += teamPartnerRepeats(c.teamA, ss) + teamPartnerRepeats(c.teamB, ss);
     if ((genderGapOf(c.teamA, c.teamB, opts) ?? 0) >= 2) genderGap2++;
     if (c.type === "doubles") {
@@ -201,12 +217,13 @@ export function countRepeats(
       if (key && (ss.quad?.get(key) ?? 0) > 0) quad++;
     }
   }
-  return { genderGap2, partner, quad };
+  return { avoid, genderGap2, partner, quad };
 }
 
-/** Lexicographic: no 女女 vs 男男 first, then fewer repeated partnerships, then
+/** Lexicographic: no avoid-pair on a court first, then no 女女 vs 男男, then fewer repeated partnerships, then
  *  fewer repeated foursomes, then the weighted score. Negative when `a` wins. */
 function compareCandidates(a: { rep: RepeatCount; score: number }, b: { rep: RepeatCount; score: number }): number {
+  if (a.rep.avoid !== b.rep.avoid) return a.rep.avoid - b.rep.avoid;
   if (a.rep.genderGap2 !== b.rep.genderGap2) return a.rep.genderGap2 - b.rep.genderGap2;
   if (a.rep.partner !== b.rep.partner) return a.rep.partner - b.rep.partner;
   if (a.rep.quad !== b.rep.quad) return a.rep.quad - b.rep.quad;
@@ -228,6 +245,8 @@ function bestSplitOf4(four: readonly AttendeeRef[], hist: PairHistory, ss: SameS
     // for cheaper opponents either.
     const key = {
       rep: {
+        // All four share the court whichever way they're split.
+        avoid: 0,
         genderGap2: (genderGapOf(A, B, opts) ?? 0) >= 2 ? 1 : 0,
         partner: teamPartnerRepeats(A, ss) + teamPartnerRepeats(B, ss),
         quad: 0,
@@ -290,7 +309,7 @@ export function buildRound(
     if (bestKey === null || compareCandidates(key, bestKey) < 0) {
       bestKey = key;
       best = courts;
-      if (key.rep.genderGap2 === 0 && key.rep.partner === 0 && key.rep.quad === 0 && key.score === 0) break;
+      if (key.rep.avoid === 0 && key.rep.genderGap2 === 0 && key.rep.partner === 0 && key.rep.quad === 0 && key.score === 0) break;
     }
   }
 

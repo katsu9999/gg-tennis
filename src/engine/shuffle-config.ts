@@ -10,6 +10,11 @@ export interface ShuffleConfig {
   genderStrength: RuleStrength;
   pairStrength: RuleStrength;
   oppStrength: RuleStrength;
+  /** Member pairs that must not share a court (2026-10-03). Ranked above
+   *  every other rule in the round builder, so it is only broken when no
+   *  arrangement can keep them apart (e.g. everyone left fits on one court).
+   *  Each entry is two distinct member ids, stored low-first. */
+  avoidPairs: [number, number][];
 }
 
 export const DEFAULT_SHUFFLE_CONFIG: ShuffleConfig = {
@@ -17,6 +22,7 @@ export const DEFAULT_SHUFFLE_CONFIG: ShuffleConfig = {
   genderStrength: "mid",
   pairStrength: "mid",
   oppStrength: "mid",
+  avoidPairs: [],
 };
 
 // Gender-gap penalty per matchup: gap = |males(teamA) - males(teamB)|.
@@ -39,15 +45,33 @@ function asStrength(v: unknown, fallback: RuleStrength): RuleStrength {
   return STRENGTHS.includes(v as RuleStrength) ? (v as RuleStrength) : fallback;
 }
 
+function asAvoidPairs(v: unknown): [number, number][] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const out: [number, number][] = [];
+  for (const p of v) {
+    if (!Array.isArray(p) || p.length !== 2) continue;
+    const [a, b] = p as unknown[];
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a === b) continue;
+    const pair: [number, number] = (a as number) < (b as number) ? [a as number, b as number] : [b as number, a as number];
+    const key = `${pair[0]}:${pair[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(pair);
+  }
+  return out;
+}
+
 /** Coerce persisted JSON (old session rows, localStorage) into a valid config. */
 export function normalizeShuffleConfig(v: unknown): ShuffleConfig {
-  if (typeof v !== "object" || v === null) return { ...DEFAULT_SHUFFLE_CONFIG };
+  if (typeof v !== "object" || v === null) return { ...DEFAULT_SHUFFLE_CONFIG, avoidPairs: [] };
   const o = v as Record<string, unknown>;
   return {
     genderBalance: o.genderBalance === true,
     genderStrength: asStrength(o.genderStrength, DEFAULT_SHUFFLE_CONFIG.genderStrength),
     pairStrength: asStrength(o.pairStrength, DEFAULT_SHUFFLE_CONFIG.pairStrength),
     oppStrength: asStrength(o.oppStrength, DEFAULT_SHUFFLE_CONFIG.oppStrength),
+    avoidPairs: asAvoidPairs(o.avoidPairs),
   };
 }
 
