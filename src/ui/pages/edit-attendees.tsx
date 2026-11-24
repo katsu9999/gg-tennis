@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import type { Gender, Member } from "@/engine/models";
+import type { AttendeeRef, Gender, Member } from "@/engine/models";
+import { findOnCourt } from "@/engine/substitute";
 import { navigate } from "@/ui/router";
 import { t } from "@/ui/i18n";
 import { appDialog } from "@/ui/components/app-dialog";
@@ -13,6 +14,9 @@ const selected = signal<Set<number>>(new Set());
 const ready = signal(false);
 const submitting = signal(false);
 const error = signal<string | null>(null);
+/** 今のラウンドの途中で帰る人 → 代わりに入る人（null = 代わりなし）。
+ *  選んでいない人は既定値（勝敗未記録のコートなら一番手の候補）を使う。 */
+const subChoice = signal<Map<number, number | null>>(new Map());
 
 /** Test helper — resets module-scoped UI state. */
 export function resetEditAttendeesState(): void {
@@ -20,6 +24,7 @@ export function resetEditAttendeesState(): void {
   ready.value = false;
   submitting.value = false;
   error.value = null;
+  subChoice.value = new Map();
 }
 
 function memberIdOf(ref: { kind: string; memberId?: number }): number | null {
@@ -46,6 +51,7 @@ export function EditAttendeesPage() {
           .filter((id): id is number => id !== null);
         selected.value = new Set(ids);
       }
+      subChoice.value = new Map();
       ready.value = true;
     })();
   }, []);
@@ -89,12 +95,64 @@ export function EditAttendeesPage() {
 
   const canSubmit = ready.value && changed && selected.value.size >= 2 && !submitting.value;
 
+  // 今のラウンドのコートにいるのに外された人 = ラウンドの途中で帰る人。
+  const currentRound = s.rounds[s.currentRoundIndex];
+  const memberRef = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
+  const leaversOnCourt = currentRound
+    ? [...currentActive].filter((id) => !selected.value.has(id) && findOnCourt(currentRound, memberRef(id)))
+    : [];
+  const staying = [...selected.value];
+  const subOptions = new Map<number, number[]>();
+  for (const id of leaversOnCourt) {
+    subOptions.set(
+      id,
+      sessionStore.suggestSubstitutes(id, staying)
+        .map((r) => memberIdOf(r))
+        .filter((x): x is number => x !== null),
+    );
+  }
+  /** その人の代役。手で選んだものを先に確保し、選んでいない人には残りから
+   *  既定値（勝敗未記録のコートなら一番手の候補）を当てる。同じ人を2人の代役には
+   *  しない（手で選んだ同士が重なったら、先に並んでいる帰る人を優先）。 */
+  function chosenSubs(): Map<number, number> {
+    const out = new Map<number, number>();
+    const used = new Set<number>();
+    for (const id of leaversOnCourt) {
+      const pick = subChoice.value.get(id);
+      if (pick === undefined || pick === null) continue;
+      if (!used.has(pick) && (subOptions.get(id) ?? []).includes(pick)) {
+        out.set(id, pick);
+        used.add(pick);
+      }
+    }
+    for (const id of leaversOnCourt) {
+      if (subChoice.value.has(id)) continue;
+      const pos = findOnCourt(currentRound!, memberRef(id));
+      const court = currentRound!.courts.find((c) => c.number === pos?.courtNumber);
+      if (!court || court.winner !== "none") continue;
+      const first = (subOptions.get(id) ?? []).find((x) => !used.has(x));
+      if (first !== undefined) {
+        out.set(id, first);
+        used.add(first);
+      }
+    }
+    return out;
+  }
+  const subs = chosenSubs();
+  const nameOf = (id: number): string => {
+    const name = rosterStore.all.value.find((m) => m.id === id)?.name ?? `#${id}`;
+    const n = s.attendees.find((a) => memberIdOf(a.ref) === id)?.todayNumber;
+    return n === undefined ? name : `${n} ${name}`;
+  };
+
   async function apply(): Promise<void> {
     const session = sessionStore.session.value;
     if (!session) return;
-    const confirmMsg = willRegenerate
-      ? t.editAttendees.applyConfirm(currentRoundNo + 1)
-      : t.editAttendees.applyConfirmNoRegen;
+    const confirmMsg = subs.size > 0
+      ? t.editAttendees.applyConfirm(currentRoundNo)
+      : willRegenerate
+        ? t.editAttendees.applyConfirm(currentRoundNo + 1)
+        : t.editAttendees.applyConfirmNoRegen;
     if (!(await appDialog.confirm(confirmMsg))) return;
 
     submitting.value = true;
@@ -105,6 +163,7 @@ export function EditAttendeesPage() {
         memberGenders: new Map<number, Gender>(
           rosterStore.all.value.map((m) => [m.id, m.gender]),
         ),
+        currentSubstitutes: subs,
       });
       if (res.regeneratedFrom !== null) {
         await offerRemainingRoundsNotify(res.regeneratedFrom);
@@ -169,6 +228,38 @@ export function EditAttendeesPage() {
           {t.editAttendees.selectedCount(selected.value.size)}
         </p>
       </section>
+
+      {leaversOnCourt.length > 0 && (
+        <section class="card" data-testid="subs-card" style={{ marginBottom: 12 }}>
+          <strong>{t.editAttendees.subsTitle(currentRoundNo)}</strong>
+          <p class="muted" style={{ margin: "4px 0 8px", fontSize: 13 }}>{t.editAttendees.subsHint}</p>
+          {leaversOnCourt.map((id) => (
+            <label key={id} style={{ display: "block", marginBottom: 8, fontWeight: 700, fontSize: 14 }}>
+              {t.editAttendees.subsLabel(nameOf(id))}
+              <select
+                data-testid={`sub-select-${id}`}
+                value={String(subs.get(id) ?? "")}
+                onChange={(e) => {
+                  const v = (e.currentTarget as HTMLSelectElement).value;
+                  const next = new Map(subChoice.value);
+                  next.set(id, v === "" ? null : Number(v));
+                  subChoice.value = next;
+                }}
+                style={{ display: "block", width: "100%", marginTop: 4, padding: 8, fontSize: 15 }}
+              >
+                <option value="">{t.editAttendees.subsNone}</option>
+                {(subOptions.get(id) ?? [])
+                  // 他の帰る人の代役に「手で」選ばれた人は選べない（既定値は譲れるので出す）
+                  .filter((cand) => ![...subChoice.value].some(([other, v]) =>
+                    other !== id && v === cand && leaversOnCourt.includes(other)))
+                  .map((cand) => (
+                    <option key={cand} value={String(cand)}>{nameOf(cand)}</option>
+                  ))}
+              </select>
+            </label>
+          ))}
+        </section>
+      )}
 
       {error.value && <p style={{ color: "crimson" }}>{error.value}</p>}
 

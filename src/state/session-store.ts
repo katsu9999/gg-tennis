@@ -15,6 +15,7 @@ import {
   decayHistory,
 } from "@/engine/stats";
 import { mulberry32 } from "@/engine/rng";
+import { findOnCourt, rankSubstitutes, sameRef, substituteInRound } from "@/engine/substitute";
 import type { SessionRepository, SessionRow } from "@/data/session-repository";
 import type { HistoryRepository } from "@/data/history-repository";
 import type { MatchLogRepository } from "@/data/match-log-repository";
@@ -77,13 +78,21 @@ export interface ChangeAttendeesInput {
   memberIds: number[];
   /** memberId → gender。追加メンバーの性別スナップショット用。 */
   memberGenders?: ReadonlyMap<number, Gender>;
+  /** 今のラウンドの途中で帰る人の代わりに入る人（帰る人の memberId → 代わりの memberId）。
+   *  載っていない人は今のラウンドを最後までやった扱いで、今のラウンドは変えない。 */
+  currentSubstitutes?: ReadonlyMap<number, number>;
 }
 
 export interface ChangeAttendeesResult {
   added: number;
   left: number;
-  /** 組み直した未実施ラウンドの先頭 index。組み直しが無ければ null。 */
+  /** 今のラウンドで代役を入れた人数。 */
+  substituted: number;
+  /** 中身が変わった最初のラウンドの index（LINE の送り直しはここから）。変化が無ければ null。 */
   regeneratedFrom: number | null;
+  /** 先のラウンドをどう直したか。"patched" = 帰った人の枠だけ休憩の人と差し替え、
+   *  "regenerated" = 組み直し（人が増えた・差し替えられる人がいなかった）。 */
+  futureMode: "patched" | "regenerated" | null;
   totalRounds: number;
 }
 
@@ -99,6 +108,9 @@ export interface SessionStore {
   /** 途中参加・途中離脱。今表示中のラウンドまではそのまま残し、先に組んだだけの
    *  未実施ラウンドを新しいメンバー構成で組み直す。 */
   changeAttendees(input: ChangeAttendeesInput): Promise<ChangeAttendeesResult>;
+  /** 今のラウンドで `outMemberId` の代わりに入れる候補（良い順）。今のラウンドの
+   *  休憩の人から、`staying` に残っている人だけ。 */
+  suggestSubstitutes(outMemberId: number, staying: readonly number[]): AttendeeRef[];
   goToPreviousRound(): void;
   recordWinner(courtNumber: number, winner: "A" | "B" | null): Promise<void>;
   endSession(): Promise<void>;
@@ -406,34 +418,118 @@ export function createSessionStore(deps: {
       throw new Error("参加者が2人未満になります。1人以上残してください。");
     }
 
+    const member = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
+    const current = s.currentRoundIndex >= 0 ? s.rounds[s.currentRoundIndex] : undefined;
+
+    // 今のラウンドの代役。帰る人がコートにいて、代わりの人が残る人で、コートに
+    // まだ出ていないことを確かめてから、差し替えたラウンドを作っておく（まだ s には入れない）。
+    let patchedCurrent: Round | null = null;
+    let substituted = 0;
+    if (current && input.currentSubstitutes && input.currentSubstitutes.size > 0) {
+      let r = current;
+      for (const [outId, inId] of input.currentSubstitutes) {
+        if (wanted.has(outId)) throw new Error("代役は帰る人にだけ指定できます。");
+        if (!wanted.has(inId)) throw new Error("代わりに入る人が残るメンバーにいません。");
+        if (!s.attendees.some(a => a.ref.kind === "member" && a.ref.memberId === inId)) {
+          throw new Error("代わりに入る人は今日の参加者から選んでください。");
+        }
+        r = substituteInRound(r, member(outId), member(inId), "none");
+        substituted += 1;
+      }
+      patchedCurrent = r;
+    }
+
     generating.value = true;
     try {
       // 通信は先に済ませる。ここから下は同期で、途中で失敗しない。
       const total = s.rounds.length;
       const keep = Math.max(s.currentRoundIndex + 1, 0);
-      const needsRebuild = total > keep;
+      const hasFuture = total > keep;
       let freshHistory: PairHistory | null = null;
-      if (needsRebuild) {
+      if (hasFuture || patchedCurrent) {
         freshHistory = await historyRepo.loadPairHistory();
         decayHistory(freshHistory);
       }
 
+      // 勝敗をもう付けたコートで代役を入れたら、ランキングの元（match_log）も
+      // 代わりに入った人で付け直す。
+      if (patchedCurrent && current) {
+        for (const before of current.courts) {
+          const after = patchedCurrent.courts.find(c => c.number === before.number)!;
+          const changed =
+            JSON.stringify([before.teamA, before.teamB]) !== JSON.stringify([after.teamA, after.teamB]);
+          if (!changed || (before.winner !== "A" && before.winner !== "B")) continue;
+          const oldA = memberIdsFrom(before.teamA);
+          const newA = memberIdsFrom(after.teamA);
+          const newB = memberIdsFrom(after.teamB);
+          // 途中で落ちてやり直したとき、前回入れた新しい行が残っていても二重に
+          // ならないよう、新しい team_a の行も消してから入れる。
+          await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, oldA);
+          if (JSON.stringify(newA) !== JSON.stringify(oldA)) {
+            await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, newA);
+          }
+          if (newA.length > 0 && newB.length > 0) {
+            try {
+              await matchLogRepo.add({
+                sessionId: s.id,
+                roundIndex: s.currentRoundIndex,
+                courtType: after.type,
+                teamA: newA,
+                teamB: newB,
+                winner: before.winner,
+              });
+            } catch (e) {
+              // 消したのに入れられなかった。セッションは元のままなので、元の行を
+              // 戻して「勝敗はあるのに記録が無い」状態を残さない（戻せなくても元の
+              // エラーを返す。その場合も勝敗を付け直せば記録は戻る）。
+              const oldB = memberIdsFrom(before.teamB);
+              if (oldA.length > 0 && oldB.length > 0) {
+                await matchLogRepo.add({
+                  sessionId: s.id,
+                  roundIndex: s.currentRoundIndex,
+                  courtType: before.type,
+                  teamA: oldA,
+                  teamB: oldB,
+                  winner: before.winner,
+                }).catch(() => undefined);
+              }
+              throw e;
+            }
+          }
+        }
+      }
+
+      // 先のラウンドに勝敗が付いている（「前」で戻ってから変更した）なら、そこは
+      // 組み直しになり勝敗も消える。古い match_log 行が残るとランキングに
+      // やっていない試合が数えられ、組み直した試合に付けると二重になるので消す。
+      const futureHasResults = hasFuture && s.rounds.slice(keep).some(r =>
+        r.courts.some(c => c.winner === "A" || c.winner === "B"));
+      if (futureHasResults) {
+        for (let i = keep; i < s.rounds.length; i++) {
+          for (const c of s.rounds[i]!.courts) {
+            if (c.winner !== "A" && c.winner !== "B") continue;
+            await matchLogRepo.deleteByRoundCourt(s.id, i, memberIdsFrom(c.teamA));
+          }
+        }
+      }
+
       let added = 0;
       let left = 0;
+      let returned = 0;
 
       const known = new Set<number>();
       for (const a of s.attendees) {
         if (a.ref.kind !== "member") continue;
         known.add(a.ref.memberId);
         const stays = wanted.has(a.ref.memberId);
-        if (stays && a.left) a.left = false;          // 帰ったつもりが戻ってきた
+        if (stays && a.left) { a.left = false; returned += 1; } // 帰ったつもりが戻ってきた
         else if (!stays && !a.left) { a.left = true; left += 1; }
       }
 
       for (const id of input.memberIds) {
         if (known.has(id)) continue;
         known.add(id);                                 // 同じ id が2回来ても増やさない
-        const ref: AttendeeRef = { kind: "member", memberId: id };
+        const ref = member(id);
         s.attendees.push({
           ref,
           todayNumber: s.attendees.length + 1,
@@ -445,20 +541,107 @@ export function createSessionStore(deps: {
       }
 
       let regeneratedFrom: number | null = null;
-      if (needsRebuild && freshHistory) {
+      let futureMode: ChangeAttendeesResult["futureMode"] = null;
+      if (freshHistory) {
+        const future = s.rounds.slice(keep);
         s.rounds = s.rounds.slice(0, keep);
+        if (patchedCurrent) s.rounds[keep - 1] = patchedCurrent;
         rebuildFromRoundsWith(s, freshHistory);
-        while (s.rounds.length < total) generateOneRound(s);
+
+        if (hasFuture) {
+          // 人が増えた（戻った）ときは新しい人を入れるために組み直す。帰っただけなら
+          // 先のラウンドは帰った人の枠を休憩の人と差し替えるだけ。LINE で流した
+          // 組み合わせが丸ごと変わると、見ていた人が混乱する（2026-11-21）。
+          // 先のラウンドに勝敗がある場合は差し替えず組み直す（記録は上で消した）。
+          let patched = false;
+          if (added + returned === 0 && !futureHasResults) patched = patchFutureRounds(s, future);
+          else while (s.rounds.length < total) generateOneRound(s);
+          // 中身が変わった最初のラウンドから LINE を送り直す。帰った人が休憩に
+          // いただけなら組み合わせは変わらないので、送り直しは聞かない。
+          const sameCourts = (a: Round, b: Round | undefined) =>
+            !!b && JSON.stringify(a.courts) === JSON.stringify(b.courts);
+          const firstChanged = s.rounds.findIndex((r, i) => i >= keep && !sameCourts(r, future[i - keep]));
+          futureMode = patched ? "patched" : "regenerated";
+          regeneratedFrom = firstChanged >= 0 ? firstChanged : null;
+        }
+        if (patchedCurrent) regeneratedFrom = keep - 1;
         s.currentRoundIndex = keep - 1;
-        regeneratedFrom = keep;
       }
 
       session.value = { ...s };
       await sessionRepo.upsert(toSessionRow(session.value));
-      return { added, left, regeneratedFrom, totalRounds: s.rounds.length };
+      return { added, left, substituted, regeneratedFrom, futureMode, totalRounds: s.rounds.length };
     } finally {
       generating.value = false;
     }
+  }
+
+  /** 先に組んであったラウンドを順に積み直し、帰った人の枠だけ休憩の人で埋める。
+   *  差し替えられる人がいないラウンド（休憩が足りない）に当たったら、そこから先は
+   *  generateOneRound で組み直す。全部差し替えで済んだら true。 */
+  function patchFutureRounds(s: InMemorySession, future: readonly Round[]): boolean {
+    const leftKeys = new Set(s.attendees.filter(a => a.left).map(a => refKey(a.ref)));
+    const isLeft = (r: AttendeeRef) => leftKeys.has(refKey(r));
+    const genderOf = s.shuffleConfig.genderBalance
+      ? (r: AttendeeRef): Gender =>
+          s.attendees.find(a => sameRef(a.ref, r))?.gender ?? "unknown"
+      : undefined;
+    const total = s.rounds.length + future.length;
+
+    for (const original of future) {
+      let r: Round | null = {
+        ...original,
+        index: s.rounds.length,
+        resters: original.resters.filter(x => !isLeft(x)),
+      };
+      for (const p of original.courts.flatMap(c => [...c.teamA, ...c.teamB])) {
+        if (!r || !isLeft(p)) continue;
+        const ranked = rankSubstitutes(r, p, r.resters, {
+          playCount: (x) => s.todayStats.get(refKey(x))?.play ?? 0,
+          sameSession,
+          genderOf,
+        });
+        r = ranked[0] ? substituteInRound(r, p, ranked[0], "none") : null;
+      }
+      if (!r) {
+        while (s.rounds.length < total) generateOneRound(s);
+        return false;
+      }
+      applyPlayedRound(s, r);
+      s.rounds.push(r);
+    }
+    return true;
+  }
+
+  function suggestSubstitutes(outMemberId: number, staying: readonly number[]): AttendeeRef[] {
+    const s = session.value;
+    if (!s || s.currentRoundIndex < 0) return [];
+    const round = s.rounds[s.currentRoundIndex];
+    if (!round) return [];
+    const out: AttendeeRef = { kind: "member", memberId: outMemberId };
+    if (!findOnCourt(round, out)) return [];
+
+    // 今のラウンドより前に実際にやった分だけで数える（todayStats は先に組んだ分も含む）。
+    const play = new Map<string, number>();
+    const ss: SameSessionStats = { partner: new Map(), opp: new Map() };
+    for (const r of s.rounds.slice(0, s.currentRoundIndex)) {
+      for (const c of r.courts) {
+        for (const p of [...c.teamA, ...c.teamB]) play.set(refKey(p), (play.get(refKey(p)) ?? 0) + 1);
+      }
+      applyRoundToSameSession(ss, r.courts);
+    }
+    const stay = new Set(staying);
+    const candidates = round.resters.filter(r => r.kind !== "member" || stay.has(r.memberId))
+      // 代役はゲスト不可（memberIds で受け渡すため）
+      .filter(r => r.kind === "member");
+    const genderOf = s.shuffleConfig.genderBalance
+      ? (r: AttendeeRef): Gender => s.attendees.find(a => sameRef(a.ref, r))?.gender ?? "unknown"
+      : undefined;
+    return rankSubstitutes(round, out, candidates, {
+      playCount: (r) => play.get(refKey(r)) ?? 0,
+      sameSession: ss,
+      genderOf,
+    });
   }
 
   // ------------------------------------------------------------------
@@ -606,32 +789,33 @@ export function createSessionStore(deps: {
     sameSession = { partner: new Map(), opp: new Map() };
     history = freshHistory;
 
-    for (const r of s.rounds) {
-      for (const c of r.courts) {
-        for (const ref of [...c.teamA, ...c.teamB]) {
-          const key = refKey(ref);
-          const st = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
-          s.todayStats.set(key, {
-            ...st,
-            play: st.play + 1,
-            singles: st.singles + (c.type === "singles" ? 1 : 0),
-          });
-        }
-      }
-      for (const ref of r.resters) {
+    s.prevResters = [];
+    s.prevSingles = [];
+    for (const r of s.rounds) applyPlayedRound(s, r);
+  }
+
+  /** 1ラウンドぶんを todayStats・sameSession・ペア履歴・prevResters/prevSingles に積む。 */
+  function applyPlayedRound(s: InMemorySession, r: Round): void {
+    for (const c of r.courts) {
+      for (const ref of [...c.teamA, ...c.teamB]) {
         const key = refKey(ref);
         const st = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
-        s.todayStats.set(key, { ...st, rest: st.rest + 1 });
+        s.todayStats.set(key, {
+          ...st,
+          play: st.play + 1,
+          singles: st.singles + (c.type === "singles" ? 1 : 0),
+        });
       }
-      applyRoundToHistory(history, r.courts);
-      applyRoundToSameSession(sameSession, r.courts);
     }
-
-    const last = s.rounds.at(-1);
-    s.prevResters = last ? last.resters : [];
-    s.prevSingles = last
-      ? last.courts.filter((c) => c.type === "singles").flatMap((c) => [...c.teamA, ...c.teamB])
-      : [];
+    for (const ref of r.resters) {
+      const key = refKey(ref);
+      const st = s.todayStats.get(key) ?? { play: 0, rest: 0, singles: 0 };
+      s.todayStats.set(key, { ...st, rest: st.rest + 1 });
+    }
+    applyRoundToHistory(history, r.courts);
+    applyRoundToSameSession(sameSession, r.courts);
+    s.prevResters = r.resters;
+    s.prevSingles = r.courts.filter((c) => c.type === "singles").flatMap((c) => [...c.teamA, ...c.teamB]);
   }
 
   // ------------------------------------------------------------------
@@ -720,7 +904,7 @@ export function createSessionStore(deps: {
     session.value = s;
   }
 
-  return { session, generating, startNewSession, nextRound, generateRounds, changeAttendees, goToPreviousRound, recordWinner, endSession, endSessionAtCurrentRound, discardSession, resume };
+  return { session, generating, startNewSession, nextRound, generateRounds, changeAttendees, suggestSubstitutes, goToPreviousRound, recordWinner, endSession, endSessionAtCurrentRound, discardSession, resume };
 }
 
 /** True when at least one court in any round has a recorded winner. Used by

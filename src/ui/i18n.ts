@@ -125,13 +125,17 @@ export const ja = {
   editAttendees: {
     title: "メンバーの追加・離脱",
     hint: (currentRoundNo: number) =>
-      `R${currentRoundNo} まではそのまま。R${currentRoundNo + 1} 以降を新しいメンバーで組み直します。`,
+      `R${currentRoundNo} までの記録はそのまま。帰った人は、R${currentRoundNo + 1} 以降の出番を休憩の人と入れ替えます（他の組み合わせはそのまま）。途中から来た人がいるときは R${currentRoundNo + 1} 以降を組み直します。`,
+    subsTitle: (currentRoundNo: number) => `R${currentRoundNo} の途中で帰る人の代わり`,
+    subsHint: "今コートに出ている人が帰るときは、休憩の人から代わりを選べます。勝敗は代わりの人に付きます。",
+    subsNone: "代わりなし（このラウンドは最後まで出た）",
+    subsLabel: (name: string) => `${name} の代わり`,
     hintNoRegen: "組み直す先のラウンドはありません。次のラウンドから反映されます。",
     joined: "追加",
     selectedCount: (n: number) => `参加: ${n} 人`,
     apply: "変更を反映",
     applyConfirm: (fromRoundNo: number) =>
-      `R${fromRoundNo} 以降を組み直します。よろしいですか？\n（実施済みのラウンドと勝敗はそのまま残ります）`,
+      `メンバーを変更して、R${fromRoundNo} 以降に反映します。よろしいですか？\n（実施済みのラウンドと勝敗はそのまま残ります）`,
     applyConfirmNoRegen: "メンバーを変更します。次のラウンドから反映されます。",
     applyFailed: (msg: string) => `メンバーの変更に失敗しました:\n${msg}`,
     back: "やめる",
@@ -181,6 +185,26 @@ export const ja = {
     meta: (players: number, courts: number, rounds: number) =>
       `${players}人 · ${courts}コート · ${rounds}ラウンド`,
     listMeta: (players: number, rounds: number) => `${players}人 · ${rounds}R`,
+    swapBtn: "↔ 選手を入れ替え",
+    swapTitle: (roundNo: number) => `R${roundNo} に実際に出た人を直す`,
+    swapOut: "記録上出ていた人",
+    swapIn: "実際に出た人",
+    swapApply: "入れ替える",
+    swapCancel: "やめる",
+    swapConfirm: (outName: string, inName: string, roundNo: number) =>
+      `R${roundNo} の ${outName} を ${inName} に入れ替えます。\n勝敗は ${inName} に付け替わり、ランキングにも反映されます。`,
+    swapFailed: (msg: string) =>
+      `入れ替えに失敗しました:\n${msg}\n途中まで反映されている場合があります。電波を確認して、同じ入れ替えをもう一度行ってください。`,
+    standingsTitle: "🏆 この日の順位",
+  },
+  standings: {
+    empty: "まだ勝敗が記録されていません。",
+    rank: "順位",
+    player: "名前",
+    wins: "勝",
+    losses: "敗",
+    guest: "ゲスト",
+    liveToggle: "🏆 今日の順位",
   },
   settingsLocal: {
     title: "設定",
@@ -311,13 +335,17 @@ export const en: Strings = {
   editAttendees: {
     title: "Players joining / leaving",
     hint: (currentRoundNo: number) =>
-      `R${currentRoundNo} stays as it is. R${currentRoundNo + 1} onwards will be rebuilt with the new line-up.`,
+      `R${currentRoundNo} and earlier stay as they are. Anyone leaving is swapped for a resting player from R${currentRoundNo + 1} on — every other pairing stays. If someone joins, R${currentRoundNo + 1} onwards is rebuilt.`,
+    subsTitle: (currentRoundNo: number) => `Who takes over in R${currentRoundNo}?`,
+    subsHint: "If someone on court leaves mid-round, pick a resting player to take their place. The result goes to the replacement.",
+    subsNone: "Nobody (they finished this round)",
+    subsLabel: (name: string) => `Replacing ${name}`,
     hintNoRegen: "No upcoming rounds to rebuild — the change applies from the next round.",
     joined: "new",
     selectedCount: (n: number) => `Playing: ${n}`,
     apply: "Apply changes",
     applyConfirm: (fromRoundNo: number) =>
-      `Rebuild R${fromRoundNo} onwards?\n(Rounds already played and their results are kept.)`,
+      `Update the line-up from R${fromRoundNo} on?\n(Rounds already played and their results are kept.)`,
     applyConfirmNoRegen: "Update the line-up? It applies from the next round.",
     applyFailed: (msg: string) => `Could not change the line-up:\n${msg}`,
     back: "Cancel",
@@ -366,6 +394,26 @@ export const en: Strings = {
     meta: (players: number, courts: number, rounds: number) =>
       `${players} players · ${courts} courts · ${rounds} rounds`,
     listMeta: (players: number, rounds: number) => `${players} players · ${rounds}R`,
+    swapBtn: "↔ Swap a player",
+    swapTitle: (roundNo: number) => `Fix who actually played in R${roundNo}`,
+    swapOut: "Recorded as playing",
+    swapIn: "Actually played",
+    swapApply: "Swap",
+    swapCancel: "Cancel",
+    swapConfirm: (outName: string, inName: string, roundNo: number) =>
+      `Replace ${outName} with ${inName} in R${roundNo}?\nThe result moves to ${inName} and the rankings are updated.`,
+    swapFailed: (msg: string) =>
+      `Could not swap the player:\n${msg}\nIt may be partly saved — check your connection and do the same swap again.`,
+    standingsTitle: "🏆 Standings for the day",
+  },
+  standings: {
+    empty: "No results recorded yet.",
+    rank: "#",
+    player: "Player",
+    wins: "W",
+    losses: "L",
+    guest: "Guest",
+    liveToggle: "🏆 Today's standings",
   },
   settingsLocal: {
     title: "Settings",

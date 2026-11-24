@@ -9,8 +9,10 @@ import { navigate, linkTo } from "@/ui/router";
 import { appDialog } from "@/ui/components/app-dialog";
 import { t } from "@/ui/i18n";
 import { BRAND, IS_LOCAL } from "@/flavor";
+import { StandingsTable } from "@/ui/components/standings-table";
 
 const showNames = signal(false);
+const showStandings = signal(false);
 
 // GG の2時間ナイターの典型。先に全部組んで LINE に1通で流す。
 // 早く終わった夜は「セッション終了」を押したラウンドまでが残る（残りは捨てる）。
@@ -52,6 +54,7 @@ function generateNextRound(): void {
 /** Test helper — resets module-scoped UI state. */
 export function resetRoundState(): void {
   showNames.value = false;
+  showStandings.value = false;
 }
 
 /** Test helper — set showNames programmatically. */
@@ -217,11 +220,51 @@ export function RoundPage() {
         </button>
       </div>
 
+      {/* その夜の順位。勝敗を付けるたびに更新される。先に組んだだけの
+          未実施ラウンドは勝敗が無いので数に入らない。 */}
+      {!IS_LOCAL && (
+        <>
+          <button
+            type="button"
+            data-testid="standings-toggle"
+            onClick={() => { showStandings.value = !showStandings.value; }}
+            style={{
+              display: "block",
+              width: "100%",
+              marginTop: 8,
+              padding: "8px 12px",
+              background: showStandings.value ? "var(--ink)" : "transparent",
+              border: "1.5px solid var(--line)",
+              borderRadius: 8,
+              color: showStandings.value ? "#fff" : "var(--muted)",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {t.standings.liveToggle}
+          </button>
+          {showStandings.value && (
+            <div class="card" style={{ marginTop: 8 }}>
+              <StandingsTable
+                rounds={s.rounds}
+                attendees={s.attendees}
+                nameFor={nameFor}
+                testId="live-standings"
+              />
+            </div>
+          )}
+        </>
+      )}
+
       {/* ラウンド生成直後の確認ダイアログを断ると、そのラウンドは二度と送れない。
           コート上では「まだ送らないで」→「やっぱり送る」が普通に起きるので、
           いつでも送り直せる口を残す。前のラウンドに戻ってから押せば送り忘れも拾える。
           何度押しても素直に送る（送信済みを覚えると、本当に届いていない時に詰む）。 */}
-      {(sessionStore.session.value?.rounds.length ?? 0) === 0 && (
+      {/* 番号表の「ラウンド開始」で R1 は必ず先にできるので、以前の条件
+          （ラウンド0本）では一度も表示されなかった。R1 だけで勝敗もまだなら出す。
+          generateRounds は既にあるラウンドを数に含めるので、R1 はそのまま残る。 */}
+      {s.rounds.length <= 1 && s.currentRoundIndex <= 0 && !sessionHasResults(s) && (
         <button
           type="button"
           data-testid="generate-all-btn"

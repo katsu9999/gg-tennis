@@ -925,3 +925,288 @@ describe("changeAttendees — 通信が落ちたとき", () => {
     expect(store.session.value!.attendees).toHaveLength(9);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 途中離脱の代役と「先のラウンドは差し替えだけ」（2026-11-21 の夜）
+// ---------------------------------------------------------------------------
+//
+// 13人・2コートで6本先出し → R4 の途中でまんぎょくさんが帰り、休憩の野原さんが
+// 代わりに入って勝った。修正前は R4 が一切変わらず、まんぎょくさんが休憩だった
+// R5 まで顔ぶれが総入れ替えになっていた。
+
+type Ref = { kind: string; memberId: number };
+const ids13 = Array.from({ length: 13 }, (_, i) => i + 1);
+const onCourt = (round: { courts: { teamA: unknown[]; teamB: unknown[] }[] }): number[] =>
+  (round.courts.flatMap((c) => [...c.teamA, ...c.teamB]) as Ref[]).map((r) => r.memberId);
+const restersOf = (round: { resters: unknown[] }): number[] => (round.resters as Ref[]).map((r) => r.memberId);
+const courtKey = (c: { teamA: unknown[]; teamB: unknown[] }) => JSON.stringify([c.teamA, c.teamB]);
+
+async function thirteenAtR4() {
+  const deps = makeDeps();
+  const store = createSessionStore(deps);
+  await store.startNewSession({
+    ...baseInput,
+    memberIds: ids13,
+    date: new Date("2026-11-21"),
+    shuffleConfig: DEFAULT_SHUFFLE_CONFIG,
+  });
+  await store.generateRounds(6);
+  for (let i = 0; i < 3; i++) await store.nextRound(); // R4 を表示中（index 3）
+  return { deps, store };
+}
+
+describe("session store — 途中離脱は差し替えだけ（組み直さない）", () => {
+  it("帰った人が休憩だったラウンドは、休憩から外れるだけで顔ぶれは変わらない", async () => {
+    const { store } = await thirteenAtR4();
+    const s0 = store.session.value!;
+    // R5 で休憩している人を帰らせる
+    const leaver = restersOf(s0.rounds[4]!)[0]!;
+    const beforeR5 = s0.rounds[4]!.courts.map(courtKey);
+
+    const res = await store.changeAttendees({ memberIds: ids13.filter((x) => x !== leaver) });
+
+    const s = store.session.value!;
+    expect(res.futureMode).toBe("patched");
+    expect(s.rounds[4]!.courts.map(courtKey)).toEqual(beforeR5);
+    expect(restersOf(s.rounds[4]!)).not.toContain(leaver);
+  });
+
+  it("帰った人が出るはずだった枠だけ、休憩の人と入れ替わる（他のコートはそのまま）", async () => {
+    const { store } = await thirteenAtR4();
+    const before = store.session.value!.rounds.map((r) => structuredClone(r));
+    // R6 でコートに出る人を帰らせる
+    const leaver = onCourt(before[5]!)[0]!;
+
+    await store.changeAttendees({ memberIds: ids13.filter((x) => x !== leaver) });
+
+    const s = store.session.value!;
+    expect(s.rounds).toHaveLength(6);
+    for (let i = 4; i < 6; i++) {
+      const r = s.rounds[i]!;
+      expect([...onCourt(r), ...restersOf(r)]).not.toContain(leaver);
+      expect(onCourt(r)).toHaveLength(8);
+      // 帰った人がいなかったコートは1面も変わらない
+      const untouched = before[i]!.courts.filter((c) => !onCourt({ courts: [c] }).includes(leaver));
+      for (const c of untouched) {
+        expect(r.courts.map(courtKey)).toContain(courtKey(c));
+      }
+      // 代わりに入った人は、元のラウンドで休憩していた人
+      const newcomer = onCourt(r).filter((x) => !onCourt(before[i]!).includes(x));
+      for (const n of newcomer) expect(restersOf(before[i]!)).toContain(n);
+    }
+  });
+
+  it("差し替え後の出場・休み回数がラウンドの中身と一致する", async () => {
+    const { store } = await thirteenAtR4();
+    const leaver = onCourt(store.session.value!.rounds[5]!)[0]!;
+    await store.changeAttendees({ memberIds: ids13.filter((x) => x !== leaver) });
+
+    const s = store.session.value!;
+    for (const id of ids13) {
+      const st = s.todayStats.get(JSON.stringify({ kind: "member", memberId: id }))!;
+      const play = s.rounds.filter((r) => onCourt(r).includes(id)).length;
+      const rest = s.rounds.filter((r) => restersOf(r).includes(id)).length;
+      expect([st.play, st.rest]).toEqual([play, rest]);
+    }
+  });
+
+  it("休憩の人がいないラウンドは差し替えられないので組み直す", async () => {
+    // 8人・2コート = 休憩なし
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(6);
+    await store.nextRound();
+
+    const res = await store.changeAttendees({ memberIds: [1, 2, 3, 4, 5, 6, 7] });
+
+    const s = store.session.value!;
+    expect(res.futureMode).toBe("regenerated");
+    for (let i = 2; i < 6; i++) expect([...onCourt(s.rounds[i]!), ...restersOf(s.rounds[i]!)]).not.toContain(8);
+  });
+
+  it("人が増えたときは今までどおり組み直す（新しい人を入れるため）", async () => {
+    const { store } = await thirteenAtR4();
+    const res = await store.changeAttendees({ memberIds: [...ids13, 14] });
+    expect(res.futureMode).toBe("regenerated");
+    expect(onCourt(store.session.value!.rounds[4]!).concat(restersOf(store.session.value!.rounds[4]!))).toContain(14);
+  });
+});
+
+describe("session store — 今のラウンドに代役を入れる", () => {
+  it("帰った人の枠に代役が入り、帰った人は今のラウンドから消える", async () => {
+    const { store } = await thirteenAtR4();
+    const r4 = store.session.value!.rounds[3]!;
+    const leaver = onCourt(r4)[0]!;
+    const sub = restersOf(r4)[0]!;
+
+    const res = await store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver, sub]]),
+    });
+
+    const s = store.session.value!;
+    expect(res.substituted).toBe(1);
+    expect(res.regeneratedFrom).toBe(3); // LINE は今のラウンドから送り直す
+    expect(s.currentRoundIndex).toBe(3);
+    expect(onCourt(s.rounds[3]!)).toContain(sub);
+    expect(onCourt(s.rounds[3]!)).not.toContain(leaver);
+    expect(restersOf(s.rounds[3]!)).not.toContain(sub);
+    expect(restersOf(s.rounds[3]!)).not.toContain(leaver);
+    // 代役の位置は帰った人と同じ（同じコート・同じチーム）
+    const idx = onCourt(r4).indexOf(leaver);
+    expect(onCourt(s.rounds[3]!)[idx]).toBe(sub);
+  });
+
+  it("勝敗を付けたあとに代役を入れたら、ランキングの記録も代役で付け直す", async () => {
+    const { deps, store } = await thirteenAtR4();
+    const r4 = store.session.value!.rounds[3]!;
+    const court = r4.courts[0]!;
+    const leaver = (court.teamB[0] as Ref).memberId;
+    const sub = restersOf(r4)[0]!;
+    await store.recordWinner(court.number, "B");
+    deps.matchLogRepo.deleteByRoundCourt.mockClear();
+    deps.addedMatches.length = 0;
+
+    await store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver, sub]]),
+    });
+
+    const s = store.session.value!;
+    expect(s.rounds[3]!.courts[0]!.winner).toBe("B");
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(
+      s.id, 3, (court.teamA as Ref[]).map((r) => r.memberId),
+    );
+    const added = deps.addedMatches.at(-1) as { teamB: number[]; winner: string };
+    expect(added.winner).toBe("B");
+    expect(added.teamB).toContain(sub);
+    expect(added.teamB).not.toContain(leaver);
+  });
+
+  it("代役にコートに出ている人を指定したら拒否し、何も変えない", async () => {
+    const { store } = await thirteenAtR4();
+    const r4 = structuredClone(store.session.value!.rounds[3]!);
+    const [leaver, other] = onCourt(r4);
+
+    await expect(store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver!, other!]]),
+    })).rejects.toThrow();
+
+    const s = store.session.value!;
+    expect(s.rounds[3]).toEqual(r4);
+    expect(s.attendees.every((a) => !a.left)).toBe(true);
+  });
+
+  it("代役の候補は今のラウンドの休憩の人で、出場の少ない人が先", async () => {
+    const { store } = await thirteenAtR4();
+    const s = store.session.value!;
+    const leaver = onCourt(s.rounds[3]!)[0]!;
+    const staying = ids13.filter((x) => x !== leaver);
+
+    const ranked = store.suggestSubstitutes(leaver, staying).map((r) => (r as Ref).memberId);
+
+    expect([...ranked].sort((a, b) => a - b)).toEqual([...restersOf(s.rounds[3]!)].sort((a, b) => a - b));
+    const playedBefore = (id: number) => s.rounds.slice(0, 3).filter((r) => onCourt(r).includes(id)).length;
+    for (let i = 1; i < ranked.length; i++) {
+      expect(playedBefore(ranked[i - 1]!)).toBeLessThanOrEqual(playedBefore(ranked[i]!));
+    }
+  });
+});
+
+describe("changeAttendees — レビュー指摘の回帰", () => {
+  it("帰った人が先のラウンドで休憩だけなら、LINE の送り直し対象は無い", async () => {
+    // 5本先出しで R4 表示中 → 未実施は R5 だけ。R5 で休憩の人が帰る。
+    const deps = makeDeps();
+    const store = createSessionStore(deps);
+    await store.startNewSession({ ...baseInput, memberIds: ids13, date: new Date("2026-11-21"), shuffleConfig: DEFAULT_SHUFFLE_CONFIG });
+    await store.generateRounds(5);
+    for (let i = 0; i < 3; i++) await store.nextRound();
+    const leaver = restersOf(store.session.value!.rounds[4]!)[0]!;
+
+    const res = await store.changeAttendees({ memberIds: ids13.filter((x) => x !== leaver) });
+
+    expect(res.futureMode).toBe("patched");
+    expect(res.regeneratedFrom).toBeNull();
+  });
+
+  it("送り直しは中身が変わった最初のラウンドから", async () => {
+    const { store } = await thirteenAtR4();
+    const s0 = store.session.value!;
+    // R5 は休憩、R6 でコートに出る人
+    const leaver = restersOf(s0.rounds[4]!).find((id) => onCourt(s0.rounds[5]!).includes(id));
+    expect(leaver).toBeDefined();
+
+    const res = await store.changeAttendees({ memberIds: ids13.filter((x) => x !== leaver) });
+    expect(res.regeneratedFrom).toBe(5);
+  });
+
+  it("代役の記録付け直しは、やり直しても二重にならないよう新しい team_a の行も消す", async () => {
+    const { deps, store } = await thirteenAtR4();
+    const r4 = store.session.value!.rounds[3]!;
+    const court = r4.courts[0]!;
+    const leaver = (court.teamA[0] as Ref).memberId;
+    const sub = restersOf(r4)[0]!;
+    await store.recordWinner(court.number, "A");
+    deps.matchLogRepo.deleteByRoundCourt.mockClear();
+
+    await store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver, sub]]),
+    });
+
+    const newA = (store.session.value!.rounds[3]!.courts[0]!.teamA as Ref[]).map((r) => r.memberId);
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(expect.any(String), 3, newA);
+  });
+
+  it("「前」で戻ってから離脱させ、先のラウンドに勝敗があれば差し替えずに組み直す", async () => {
+    const { store } = await thirteenAtR4();
+    await store.nextRound(); // R5
+    await store.recordWinner(store.session.value!.rounds[4]!.courts[0]!.number, "A");
+    store.goToPreviousRound(); // R4 に戻る
+
+    const res = await store.changeAttendees({ memberIds: ids13.slice(0, 12) });
+    expect(res.futureMode).toBe("regenerated");
+  });
+});
+
+describe("changeAttendees — Codex レビュー指摘の回帰", () => {
+  it("代役の記録追加に失敗したら、元の記録を戻してセッションは変えない", async () => {
+    const { deps, store } = await thirteenAtR4();
+    const r4 = structuredClone(store.session.value!.rounds[3]!);
+    const court = r4.courts[0]!;
+    const leaver = (court.teamB[0] as Ref).memberId;
+    const sub = restersOf(r4)[0]!;
+    await store.recordWinner(court.number, "B");
+    deps.addedMatches.length = 0;
+    deps.matchLogRepo.add.mockRejectedValueOnce(new Error("offline"));
+
+    await expect(store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver, sub]]),
+    })).rejects.toThrow("offline");
+
+    const restored = deps.addedMatches.at(-1) as { teamA: number[]; teamB: number[]; winner: string };
+    expect(restored.teamB).toEqual((court.teamB as Ref[]).map((r) => r.memberId));
+    expect(restored.winner).toBe("B");
+    const s = store.session.value!;
+    expect(onCourt(s.rounds[3]!)).toContain(leaver);
+    expect(s.attendees.every((a) => !a.left)).toBe(true);
+  });
+
+  it("勝敗付きの先ラウンドを組み直すときは、その古い記録を消す", async () => {
+    const { deps, store } = await thirteenAtR4();
+    await store.nextRound(); // R5
+    const r5court = store.session.value!.rounds[4]!.courts[0]!;
+    await store.recordWinner(r5court.number, "A");
+    store.goToPreviousRound(); // R4
+    deps.matchLogRepo.deleteByRoundCourt.mockClear();
+
+    await store.changeAttendees({ memberIds: ids13.slice(0, 12) });
+
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(
+      expect.any(String), 4, (r5court.teamA as Ref[]).map((r) => r.memberId),
+    );
+  });
+});
