@@ -52,6 +52,7 @@ export type Route =
   | { name: "ranking" }
   | { name: "settings" }
   | { name: "privacy" }
+  | { name: "help" }
   | { name: "clubs" }
   | { name: "public-rsvp"; params: { token: string } };
 
@@ -61,6 +62,7 @@ const PUBLIC_RSVP_PATTERN = /^\/rsvp\/([A-Za-z0-9_-]+)$/;
 // ranking page needs the match log — all absent in the device-local flavour.
 const LOCAL_EXCLUDED: ReadonlySet<Route["name"]> = new Set([
   "clubs",
+  "help",
   "planned-sessions",
   "public-rsvp",
   "ranking",
@@ -90,6 +92,7 @@ function matchAnyFlavor(path: string): Route {
   if (path === "/ranking") return { name: "ranking" };
   if (path === "/settings") return { name: "settings" };
   if (path === "/privacy") return { name: "privacy" };
+  if (path === "/help") return { name: "help" };
   if (path === "/clubs") return { name: "clubs" };
   const m = PUBLIC_RSVP_PATTERN.exec(path);
   if (m) return { name: "public-rsvp", params: { token: m[1]! } };

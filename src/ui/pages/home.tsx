@@ -233,6 +233,11 @@ export function HomePage() {
         <NavButton label={t.home.navPast} to="/sessions/past" />
         <NavButton label={t.home.navSettings} to="/settings" />
       </div>
+      {!IS_LOCAL && (
+        <p style={{ marginTop: 16, textAlign: "center" }}>
+          <a href={linkTo("/help")} data-testid="help-link" style={{ fontWeight: 700 }}>{t.help.navLink}</a>
+        </p>
+      )}
     </main>
   );
 }

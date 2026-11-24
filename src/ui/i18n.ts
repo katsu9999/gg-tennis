@@ -381,6 +381,79 @@ export const ja = {
     pinNetwork: (msg: string) => `通信エラー: ${msg}`,
     unknown: "不明",
   },
+  help: {
+    navLink: "📖 使い方",
+    title: "使い方",
+    intro: "クラブの夜の組み合わせを公平に作るアプリです。休みはみんな同じ回数になり、ペアと対戦相手は毎回入れ替わります。",
+    openApp: "アプリを開く →",
+    shareHint: "このページのリンクは、そのままメンバーに渡せます。",
+    ggEntry: "GG のアプリは、端末ごとに最初の1回だけクラブ PIN を聞きます。一度入れれば次からは聞きません。",
+    line: "LINE：ラウンドを作ると、組み合わせを GG の LINE グループに送るか確認が出ます。終了時にはその日の成績も送れます。",
+    sections: [
+      {
+        title: "1. 最初の準備",
+        items: [
+          "ホーム →「名簿」で、メンバーの名前を追加します。男女バランスを使うなら「性別」も設定します。",
+          "名簿の追加・名前の変更・削除にはクラブ PIN が要ります（幹事が持っています）。",
+          "スマホではブラウザの「ホーム画面に追加」をすると、普通のアプリのように開けます。",
+        ],
+      },
+      {
+        title: "2. 当日の始め方",
+        items: [
+          "ホーム →「セッション開始」。日付・会場・コート数を入れ、来た人にチェックを付けます。",
+          "必要なら「シャッフルルール」で、男女バランスやペア・対戦相手の重複を避ける強さを変えます。",
+          "「次へ：番号を抽選」→ みんながその日の番号を確認 →「ラウンド開始」。",
+          "コートごとに試合する人が出ます。コートにいない人はその回はお休みです。",
+        ],
+      },
+      {
+        title: "3. 勝ち負けの記録",
+        items: [
+          "試合が終わったら、勝ったペアをタップします。もう一度タップすると取り消せます。",
+          "「次」で次のラウンド。「前」で前のラウンドを見返せます。",
+          "「🏆 今日の順位」で、その日の勝ち負けを途中でも見られます。",
+          "終わったら「セッション終了」。過去セッションとランキングに残ります。",
+        ],
+      },
+      {
+        title: "4. 遅れて来る人・途中で帰る人",
+        items: [
+          "ラウンド画面の「👥 メンバーの追加・離脱」で、チェックを付け外しします。",
+          "帰る人がいると、次のラウンドからお休みの人がその枠に入ります。ほかの組み合わせは変わりません。試合の途中で抜けた場合は代わりに入った人を選ぶと、勝ち負けはその人に付きます。",
+          "来た人がいると、まだやっていないラウンドを組み直してその人を入れます。",
+        ],
+      },
+      {
+        title: "5. 終わった日の直し方",
+        items: [
+          "「過去セッション」でその日を開きます。勝ったペアのタップし直しや、「↔ 選手を入れ替え」で実際に出た人への差し替えができます。ランキングも自動で直ります（PIN が必要）。",
+          "「🗑 削除」でその日と成績を消せます（PIN が必要・元に戻せません）。",
+        ],
+      },
+      {
+        title: "6. ランキング",
+        items: [
+          "シーズンごとに、個人（Elo）・ペア（3試合以上）・参加回数の3種類を見られます。",
+        ],
+      },
+      {
+        title: "7. 予定と出欠集め",
+        items: [
+          "ホーム →「予定セッションを作成する」で日付・会場・コート数を登録します（PIN が必要）。",
+          "「公開リンクを発行」→「公開リンクをコピー」で、メンバーに送ります。メンバーは名前を選んで「行く・未定・行かない」を答えるだけです（アプリも PIN も不要）。",
+          "当日は予定の「セッション開始 →」から始めると、「行く」の人に最初からチェックが付きます。",
+        ],
+      },
+      {
+        title: "8. PIN と設定",
+        items: [
+          "クラブ PIN は、名簿・予定・過去の記録を変えるときだけ聞かれます。セッションの開始と勝ち負けの記録には要りません。",
+          "PIN は「設定」→「クラブ PIN」で変えられます。クラブを管理する人にだけ教えてください。",
+        ],
+      },
+    ],
+  },
   privacy: {
     header: "プライバシー / Privacy",
   },
@@ -759,6 +832,79 @@ export const en: Strings = {
     pinServer: (msg: string) => `Server error: ${msg}`,
     pinNetwork: (msg: string) => `Network error: ${msg}`,
     unknown: "unknown",
+  },
+  help: {
+    navLink: "📖 How to use",
+    title: "How to use",
+    intro: "Court Shuffle makes fair line-ups for club nights: everyone rests the same number of times, and partners and opponents keep changing.",
+    openApp: "Open the app →",
+    shareHint: "You can share this page's link with your members as it is.",
+    ggEntry: "The GG app asks for the club PIN once on each device. After that it won't ask again.",
+    line: "LINE: after you generate a round, the app offers to send the line-up to the GG LINE group. At the end you can send the day's standings too.",
+    sections: [
+      {
+        title: "1. Before your first night",
+        items: [
+          "Home → Roster: add each player's name. Set M/F if you want gender-balanced courts.",
+          "Adding, renaming or deleting players needs the club PIN (your organiser has it).",
+          "On your phone, use your browser's \"Add to Home Screen\" so it opens like a normal app.",
+        ],
+      },
+      {
+        title: "2. On the night",
+        items: [
+          "Home → Start session. Enter the date, venue and number of courts, then tick who's playing.",
+          "Optional: change the shuffle rules (gender balance, avoid repeat partners or opponents).",
+          "Tap \"Next: draw numbers\" → everyone checks their number for the night → \"Start round\".",
+          "Each court shows who plays. Anyone not on a court is resting this round.",
+        ],
+      },
+      {
+        title: "3. Recording results",
+        items: [
+          "When a game ends, tap the winning pair. Tap again to undo.",
+          "\"Next\" goes to the next round; \"Prev\" lets you look back.",
+          "\"🏆 Today's standings\" shows wins and losses so far.",
+          "When you're done, tap \"End session\". The night is saved to Past sessions and Rankings.",
+        ],
+      },
+      {
+        title: "4. Late arrivals and early leavers",
+        items: [
+          "On the round screen, tap \"👥 Players joining / leaving\" and tick or untick players.",
+          "If someone leaves, a resting player takes their place from the next round and every other pairing stays the same. If they leave mid-game, pick who took over so the result goes to that person.",
+          "If someone joins, the rounds not yet played are rebuilt to include them.",
+        ],
+      },
+      {
+        title: "5. Fixing a past night",
+        items: [
+          "Past sessions → open the night. Tap a different winning pair, or use \"↔ Swap a player\" if the record shows the wrong person. Rankings update automatically (PIN needed).",
+          "\"🗑 Delete\" removes the night and its results (PIN needed, cannot be undone).",
+        ],
+      },
+      {
+        title: "6. Rankings",
+        items: [
+          "For each season: Individual (Elo), Pairs (3+ matches together) and Attendance.",
+        ],
+      },
+      {
+        title: "7. Planning ahead and collecting RSVPs",
+        items: [
+          "Home → \"Create a planned session\": enter the date, venue and courts (PIN needed).",
+          "Tap \"Create public link\" → \"Copy public link\" and send it to members. They pick their name and answer Going / Maybe / Not going — no app or PIN needed.",
+          "On the night, start from the plan's \"Start session →\" and everyone who said Going is already ticked.",
+        ],
+      },
+      {
+        title: "8. PIN and settings",
+        items: [
+          "The club PIN is only asked for when changing the roster, plans or past results. Starting a session and recording winners don't need it.",
+          "Change the PIN in Settings → Club PIN. Share it only with the people who run the club.",
+        ],
+      },
+    ],
   },
   privacy: {
     header: "Privacy",
