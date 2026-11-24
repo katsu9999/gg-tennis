@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import type { AttendeeRef, Gender, Member } from "@/engine/models";
 import { findOnCourt } from "@/engine/substitute";
+import { attendeeAnchorIndex } from "@/state/session-store";
 import { navigate } from "@/ui/router";
 import { t } from "@/ui/i18n";
 import { appDialog } from "@/ui/components/app-dialog";
@@ -79,8 +80,10 @@ export function EditAttendeesPage() {
   );
   const choices = [...active, ...extras];
 
-  // 実施済みのラウンド数 = 今表示中のラウンドまで。ここから先を組み直す。
-  const currentRoundNo = s.currentRoundIndex + 1;
+  // 実施済みのラウンド数 = 表示中のラウンドか、勝敗を付けた最後のラウンドの遅い方まで
+  // （「前」で戻って見ていても、やった試合は変えない）。ここから先を組み直す。
+  const anchorIndex = attendeeAnchorIndex(s);
+  const currentRoundNo = anchorIndex + 1;
   const willRegenerate = s.rounds.length > currentRoundNo;
 
   const currentActive = new Set(
@@ -96,7 +99,7 @@ export function EditAttendeesPage() {
   const canSubmit = ready.value && changed && selected.value.size >= 2 && !submitting.value;
 
   // 今のラウンドのコートにいるのに外された人 = ラウンドの途中で帰る人。
-  const currentRound = s.rounds[s.currentRoundIndex];
+  const currentRound = s.rounds[anchorIndex];
   const memberRef = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
   const leaversOnCourt = currentRound
     ? [...currentActive].filter((id) => !selected.value.has(id) && findOnCourt(currentRound, memberRef(id)))

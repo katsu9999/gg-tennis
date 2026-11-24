@@ -180,6 +180,19 @@ function deriveRngSeed(date: Date): number {
 // Factory
 // ---------------------------------------------------------------------------
 
+/**
+ * 途中参加・離脱を当てはめる「今のラウンド」。ふつうは表示中のラウンドだが、「前」で
+ * 戻って見ているときは、勝敗を付けた最後のラウンドを基準にする（それより前を変えると
+ * 実際にやった試合の記録が消えてしまう。2026-11-24）。
+ */
+export function attendeeAnchorIndex(s: { currentRoundIndex: number; rounds: readonly Round[] }): number {
+  let last = -1;
+  s.rounds.forEach((r, i) => {
+    if (r.courts.some(c => c.winner === "A" || c.winner === "B")) last = i;
+  });
+  return Math.max(s.currentRoundIndex, last);
+}
+
 export function createSessionStore(deps: {
   sessionRepo: SessionRepository;
   historyRepo: HistoryRepository;
@@ -420,7 +433,8 @@ export function createSessionStore(deps: {
     }
 
     const member = (id: number): AttendeeRef => ({ kind: "member", memberId: id });
-    const current = s.currentRoundIndex >= 0 ? s.rounds[s.currentRoundIndex] : undefined;
+    const anchor = attendeeAnchorIndex(s);
+    const current = anchor >= 0 ? s.rounds[anchor] : undefined;
 
     // 今のラウンドの代役。帰る人がコートにいて、代わりの人が残る人で、コートに
     // まだ出ていないことを確かめてから、差し替えたラウンドを作っておく（まだ s には入れない）。
@@ -444,7 +458,7 @@ export function createSessionStore(deps: {
     try {
       // 通信は先に済ませる。ここから下は同期で、途中で失敗しない。
       const total = s.rounds.length;
-      const keep = Math.max(s.currentRoundIndex + 1, 0);
+      const keep = Math.max(anchor + 1, 0);
       const hasFuture = total > keep;
       let freshHistory: PairHistory | null = null;
       if (hasFuture || patchedCurrent) {
@@ -465,15 +479,15 @@ export function createSessionStore(deps: {
           const newB = memberIdsFrom(after.teamB);
           // 途中で落ちてやり直したとき、前回入れた新しい行が残っていても二重に
           // ならないよう、新しい team_a の行も消してから入れる。
-          await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, oldA);
+          await matchLogRepo.deleteByRoundCourt(s.id, anchor, oldA);
           if (JSON.stringify(newA) !== JSON.stringify(oldA)) {
-            await matchLogRepo.deleteByRoundCourt(s.id, s.currentRoundIndex, newA);
+            await matchLogRepo.deleteByRoundCourt(s.id, anchor, newA);
           }
           if (newA.length > 0 && newB.length > 0) {
             try {
               await matchLogRepo.add({
                 sessionId: s.id,
-                roundIndex: s.currentRoundIndex,
+                roundIndex: anchor,
                 courtType: after.type,
                 teamA: newA,
                 teamB: newB,
@@ -487,7 +501,7 @@ export function createSessionStore(deps: {
               if (oldA.length > 0 && oldB.length > 0) {
                 await matchLogRepo.add({
                   sessionId: s.id,
-                  roundIndex: s.currentRoundIndex,
+                  roundIndex: anchor,
                   courtType: before.type,
                   teamA: oldA,
                   teamB: oldB,
@@ -500,8 +514,8 @@ export function createSessionStore(deps: {
         }
       }
 
-      // 先のラウンドに勝敗が付いている（「前」で戻ってから変更した）なら、そこは
-      // 組み直しになり勝敗も消える。古い match_log 行が残るとランキングに
+      // 基準は勝敗のある最後のラウンドなので、ふつうここには来ない（念のため残す）。
+      // 先のラウンドに勝敗が付いていれば、そこは組み直しになり勝敗も消える。古い match_log 行が残るとランキングに
       // やっていない試合が数えられ、組み直した試合に付けると二重になるので消す。
       const futureHasResults = hasFuture && s.rounds.slice(keep).some(r =>
         r.courts.some(c => c.winner === "A" || c.winner === "B"));
@@ -566,8 +580,9 @@ export function createSessionStore(deps: {
           regeneratedFrom = firstChanged >= 0 ? firstChanged : null;
         }
         if (patchedCurrent) regeneratedFrom = keep - 1;
-        s.currentRoundIndex = keep - 1;
       }
+      // 「前」で戻って見ていても、変更後は基準のラウンド（最新）を表示する。
+      if (keep > 0) s.currentRoundIndex = keep - 1;
 
       session.value = { ...s };
       await sessionRepo.upsert(toSessionRow(session.value));
@@ -616,8 +631,10 @@ export function createSessionStore(deps: {
 
   function suggestSubstitutes(outMemberId: number, staying: readonly number[]): AttendeeRef[] {
     const s = session.value;
-    if (!s || s.currentRoundIndex < 0) return [];
-    const round = s.rounds[s.currentRoundIndex];
+    if (!s) return [];
+    const anchor = attendeeAnchorIndex(s);
+    if (anchor < 0) return [];
+    const round = s.rounds[anchor];
     if (!round) return [];
     const out: AttendeeRef = { kind: "member", memberId: outMemberId };
     if (!findOnCourt(round, out)) return [];
@@ -625,7 +642,7 @@ export function createSessionStore(deps: {
     // 今のラウンドより前に実際にやった分だけで数える（todayStats は先に組んだ分も含む）。
     const play = new Map<string, number>();
     const ss: SameSessionStats = { partner: new Map(), opp: new Map() };
-    for (const r of s.rounds.slice(0, s.currentRoundIndex)) {
+    for (const r of s.rounds.slice(0, anchor)) {
       for (const c of r.courts) {
         for (const p of [...c.teamA, ...c.teamB]) play.set(refKey(p), (play.get(refKey(p)) ?? 0) + 1);
       }

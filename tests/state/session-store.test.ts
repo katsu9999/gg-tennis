@@ -1160,14 +1160,19 @@ describe("changeAttendees — レビュー指摘の回帰", () => {
     expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(expect.any(String), 3, newA);
   });
 
-  it("「前」で戻ってから離脱させ、先のラウンドに勝敗があれば差し替えずに組み直す", async () => {
+  it("「前」で戻ってから離脱させても、勝敗を付けた先のラウンドはそのまま残す（2026-11-24）", async () => {
     const { store } = await thirteenAtR4();
     await store.nextRound(); // R5
-    await store.recordWinner(store.session.value!.rounds[4]!.courts[0]!.number, "A");
+    const r5 = structuredClone(store.session.value!.rounds[4]!);
+    await store.recordWinner(r5.courts[0]!.number, "A");
     store.goToPreviousRound(); // R4 に戻る
 
-    const res = await store.changeAttendees({ memberIds: ids13.slice(0, 12) });
-    expect(res.futureMode).toBe("regenerated");
+    await store.changeAttendees({ memberIds: ids13.slice(0, 12) });
+    const s = store.session.value!;
+    // 変更は勝敗のある最後のラウンド（R5）の次から。R5 は組み合わせも勝敗もそのまま。
+    expect(s.rounds[4]!.courts.map((c) => [c.teamA, c.teamB])).toEqual(r5.courts.map((c) => [c.teamA, c.teamB]));
+    expect(s.rounds[4]!.courts[0]!.winner).toBe("A");
+    expect(s.currentRoundIndex).toBe(4); // 画面も最新（R5）に戻る
   });
 });
 
@@ -1195,7 +1200,7 @@ describe("changeAttendees — Codex レビュー指摘の回帰", () => {
     expect(s.attendees.every((a) => !a.left)).toBe(true);
   });
 
-  it("勝敗付きの先ラウンドを組み直すときは、その古い記録を消す", async () => {
+  it("「前」で戻ってから変更しても、勝敗付きの先ラウンドの記録（match_log）は消さない", async () => {
     const { deps, store } = await thirteenAtR4();
     await store.nextRound(); // R5
     const r5court = store.session.value!.rounds[4]!.courts[0]!;
@@ -1205,8 +1210,30 @@ describe("changeAttendees — Codex レビュー指摘の回帰", () => {
 
     await store.changeAttendees({ memberIds: ids13.slice(0, 12) });
 
-    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(
-      expect.any(String), 4, (r5court.teamA as Ref[]).map((r) => r.memberId),
-    );
+    expect(deps.matchLogRepo.deleteByRoundCourt).not.toHaveBeenCalled();
+  });
+
+  it("「前」で戻ってから途中で抜けた人の代役を選ぶと、勝敗のある最新ラウンドに付く", async () => {
+    const { store } = await thirteenAtR4();
+    await store.nextRound(); // R5
+    const r5 = structuredClone(store.session.value!.rounds[4]!);
+    await store.recordWinner(r5.courts[0]!.number, "A");
+    store.goToPreviousRound(); // R4
+    const leaver = (r5.courts[0]!.teamA[0] as Ref).memberId;
+    const sub = restersOf(r5)[0]!;
+    const r4 = structuredClone(store.session.value!.rounds[3]!);
+
+    // 候補も R5（最新）のお休みの人から出る
+    const cands = store.suggestSubstitutes(leaver, ids13.filter((x) => x !== leaver));
+    expect(cands.map((r) => (r as Ref).memberId)).toContain(sub);
+
+    await store.changeAttendees({
+      memberIds: ids13.filter((x) => x !== leaver),
+      currentSubstitutes: new Map([[leaver, sub]]),
+    });
+    const s = store.session.value!;
+    expect(onCourt(s.rounds[4]!)).toContain(sub);
+    expect(onCourt(s.rounds[4]!)).not.toContain(leaver);
+    expect(onCourt(s.rounds[3]!)).toEqual(onCourt(r4)); // 戻って見ていた R4 は変えない
   });
 });
