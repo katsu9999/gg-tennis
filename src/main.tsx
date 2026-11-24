@@ -36,6 +36,7 @@ import { PublicRsvpPage } from "@/ui/pages/public-rsvp";
 import { RankingPage } from "@/ui/pages/ranking";
 import { PastSessionsPage } from "@/ui/pages/past-sessions";
 import { PrivacyPage } from "@/ui/pages/privacy";
+import { HelpPage } from "@/ui/pages/help";
 import { SettingsPage } from "@/ui/pages/settings";
 import { SettingsLocalPage } from "@/ui/pages/settings-local";
 import { ClubsPage } from "@/ui/pages/clubs";
@@ -54,8 +55,8 @@ function ComingSoon({ name }: { name: string }) {
   );
 }
 
-// 入室 PIN が無くても開ける画面（公開の出欠リンクとプライバシー表記）。
-const OPEN_ROUTES: ReadonlySet<string> = new Set(["public-rsvp", "privacy"]);
+// 入室 PIN が無くても開ける画面（公開の出欠リンク・プライバシー表記・使い方）。
+const OPEN_ROUTES: ReadonlySet<string> = new Set(["public-rsvp", "privacy", "help"]);
 
 function App() {
   const gated = !entryUnlocked.value && !OPEN_ROUTES.has(route.value.name);
@@ -82,6 +83,7 @@ function CurrentPage() {
     case "ranking": return <RankingPage />;
     case "past-sessions": return <PastSessionsPage />;
     case "privacy": return <PrivacyPage />;
+    case "help": return <HelpPage />;
     case "clubs": return <ClubsPage />;
     case "settings": return IS_LOCAL ? <SettingsLocalPage /> : <SettingsPage />;
     default:
