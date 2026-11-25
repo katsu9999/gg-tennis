@@ -120,6 +120,18 @@ describe("EditAttendeesPage", () => {
     expect(screen.getByTestId("edit-attendees-hint").textContent).toContain("R3");
   });
 
+  it("「前」で戻って見ていても、勝敗を付けた最後のラウンドの次から組み直すと出す", async () => {
+    const sess = makeSession(6, 1); // R2 を表示中
+    sess.rounds[3]!.courts[0]!.winner = "A"; // R4 まで勝敗あり
+    sessionStore.session.value = sess;
+    render(<EditAttendeesPage />);
+    await waitFor(() => expect(screen.getByTestId("edit-attendees-hint")).toBeTruthy());
+    const hint = screen.getByTestId("edit-attendees-hint").textContent ?? "";
+    expect(hint).toContain("R4");
+    expect(hint).toContain("R5");
+    expect(hint).not.toContain("R3");
+  });
+
   it("最終ラウンドを表示中なら「次のラウンドから」と出す", async () => {
     sessionStore.session.value = makeSession(2, 1);
     render(<EditAttendeesPage />);
