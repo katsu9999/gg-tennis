@@ -1214,7 +1214,7 @@ describe("changeAttendees — Codex レビュー指摘の回帰", () => {
   });
 
   it("「前」で戻ってから途中で抜けた人の代役を選ぶと、勝敗のある最新ラウンドに付く", async () => {
-    const { store } = await thirteenAtR4();
+    const { deps, store } = await thirteenAtR4();
     await store.nextRound(); // R5
     const r5 = structuredClone(store.session.value!.rounds[4]!);
     await store.recordWinner(r5.courts[0]!.number, "A");
@@ -1235,5 +1235,9 @@ describe("changeAttendees — Codex レビュー指摘の回帰", () => {
     expect(onCourt(s.rounds[4]!)).toContain(sub);
     expect(onCourt(s.rounds[4]!)).not.toContain(leaver);
     expect(onCourt(s.rounds[3]!)).toEqual(onCourt(r4)); // 戻って見ていた R4 は変えない
+    // 記録の付け直しも R5（roundIndex 4）に対して行う
+    expect(deps.matchLogRepo.deleteByRoundCourt).toHaveBeenCalledWith(expect.anything(), 4, expect.anything());
+    expect(deps.matchLogRepo.deleteByRoundCourt).not.toHaveBeenCalledWith(expect.anything(), 3, expect.anything());
+    expect(deps.matchLogRepo.add).toHaveBeenLastCalledWith(expect.objectContaining({ roundIndex: 4 }));
   });
 });
